@@ -6,6 +6,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Web.Script.Serialization;
@@ -136,7 +137,7 @@ internal static class Setup {
             try{Directory.CreateDirectory(shortcuts);CreateShortcut(Path.Combine(shortcuts,"校事笺.lnk"),browserPath,url,root);result.shortcutCreated=true;}
             catch(Exception error){result.warning="文件已准备好，但桌面入口未创建："+error.Message;}
             File.WriteAllText(marker,Json.Serialize(result),new UTF8Encoding(false));
-            File.WriteAllText(Path.Combine(root,"安装说明.txt"),"文件准备完成，还需要浏览器首次确认：\r\n1. 打开 "+(kind=="edge"?"edge":"chrome")+"://extensions\r\n2. 开启开发人员模式，点击加载解压缩的扩展。\r\n3. 选择以下目录：\r\n"+target+"\r\n\r\n加载完成将自动打开工作台，默认配置已就绪。后续可用桌面校事笺入口打开。更新前请导出完整备份。旧文件备份位于 .previous-* 目录，不包含浏览器数据库。",new UTF8Encoding(false));
+            File.WriteAllText(Path.Combine(root,"安装说明.txt"),"文件准备完成，还需要浏览器首次确认：\r\n1. 助手会自动打开扩展管理页（"+(kind=="edge"?"edge":"chrome")+"://extensions）。若没有自动跳转，请在浏览器地址栏按 Ctrl+V、回车。\r\n2. 开启开发人员模式，点击加载解压缩的扩展，在文件夹窗口按 Ctrl+V 粘贴并确认以下目录：\r\n"+target+"\r\n\r\n加载完成校事笺会自动打开工作台，默认配置已就绪。后续可用桌面校事笺入口打开。更新前请导出完整备份。旧文件备份位于 .previous-* 目录，不包含浏览器数据库。",new UTF8Encoding(false));
             progress("文件和入口已准备好，请完成浏览器首次加载确认。");return result;
         } catch {
             // Leave the previous directory and user data recoverable if an update cannot finish.
@@ -149,16 +150,106 @@ internal static class Setup {
         link.TargetPath=browser;link.Arguments="\""+url+"\"";link.WorkingDirectory=root;link.Description="打开校事笺本地工作台";link.IconLocation=Path.Combine(root,"App.ico");link.Save();
         System.Runtime.InteropServices.Marshal.FinalReleaseComObject(link);System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shell);
     }
-    internal static void Launch(string browser,string argument,string testProfile=null) {
+    internal static void Launch(string browser,string argument,string testProfile=null,string extra=null) {
         if(String.IsNullOrEmpty(browser))throw new Exception("没有找到所选浏览器，请安装浏览器或切换选择。");
-        string arguments="\""+argument+"\"";
+        string arguments=(String.IsNullOrEmpty(extra)?"":extra+" ")+"\""+argument+"\"";
         if(testProfile!=null)arguments="--user-data-dir=\""+Path.GetFullPath(testProfile)+"\" "+arguments;
         Process.Start(new ProcessStartInfo(browser,arguments){UseShellExecute=true});
     }
 }
 
+// Paste-and-go navigation. Edge/Chrome deliberately drop edge:// and chrome:// arguments passed by
+// external processes (verified on Edge 156: only a new tab opens), so after launching a new browser
+// window the helper focuses its address bar and types the management URL from the clipboard. Every
+// step verifies the target window is actually in the foreground; any failure simply falls back to
+// the manual Ctrl+V guidance. Browser consent is never automated or bypassed — only navigation.
+internal static class BrowserAutomation {
+    internal delegate bool EnumWindowsProc(IntPtr handle,IntPtr extra);
+    [DllImport("user32.dll")]internal static extern bool EnumWindows(EnumWindowsProc callback,IntPtr extra);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)]internal static extern int GetClassName(IntPtr handle,StringBuilder name,int count);
+    [DllImport("user32.dll")]internal static extern bool IsWindowVisible(IntPtr handle);
+    [DllImport("user32.dll")]internal static extern bool IsWindow(IntPtr handle);
+    [DllImport("user32.dll")]internal static extern uint GetWindowThreadProcessId(IntPtr handle,out uint processId);
+    [DllImport("user32.dll")]internal static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")]internal static extern bool SetForegroundWindow(IntPtr handle);
+    [DllImport("user32.dll")]internal static extern bool BringWindowToTop(IntPtr handle);
+    [DllImport("user32.dll")]internal static extern IntPtr SetFocus(IntPtr handle);
+    [DllImport("user32.dll")]internal static extern bool ShowWindow(IntPtr handle,int command);
+    [DllImport("user32.dll")]internal static extern void SwitchToThisWindow(IntPtr handle,bool altTab);
+    [DllImport("user32.dll")]internal static extern bool AttachThreadInput(uint source,uint target,bool attach);
+    [DllImport("kernel32.dll")]internal static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll",SetLastError=true)]internal static extern uint SendInput(uint count,INPUT[] inputs,int size);
+    [StructLayout(LayoutKind.Sequential)]internal struct INPUT { public uint type; public InputUnion union; }
+    [StructLayout(LayoutKind.Explicit)]internal struct InputUnion { [FieldOffset(0)]public KEYBDINPUT keyboard; [FieldOffset(0)]public MOUSEINPUT mouse; }
+    [StructLayout(LayoutKind.Sequential)]internal struct KEYBDINPUT { public ushort virtualKey; public ushort scan; public uint flags; public uint time; public IntPtr extra; }
+    [StructLayout(LayoutKind.Sequential)]internal struct MOUSEINPUT { public int x; public int y; public uint data; public uint flags; public uint time; public IntPtr extra; }
+
+    internal static List<IntPtr> BrowserWindows() {
+        var windows=new List<IntPtr>();
+        EnumWindows(delegate(IntPtr handle,IntPtr extra) {
+            if(!IsWindowVisible(handle))return true;
+            var name=new StringBuilder(64);
+            if(GetClassName(handle,name,64)<=0||name.ToString()!="Chrome_WidgetWin_1")return true;
+            uint processId;GetWindowThreadProcessId(handle,out processId);
+            try {string owner=Process.GetProcessById((int)processId).ProcessName;if(owner!="msedge"&&owner!="chrome")return true;}catch {return true;}
+            windows.Add(handle);return true;
+        },IntPtr.Zero);
+        return windows;
+    }
+    internal static bool NavigatePastedWindow(IEnumerable<IntPtr> before,string url,int timeoutMs) {
+        if(String.IsNullOrEmpty(url))return false;
+        var known=new HashSet<IntPtr>(before);IntPtr target=IntPtr.Zero;int deadline=Environment.TickCount+timeoutMs;
+        while(target==IntPtr.Zero&&Environment.TickCount<deadline) {
+            foreach(IntPtr handle in BrowserWindows())if(known.Add(handle)){target=handle;break;}
+            if(target==IntPtr.Zero)System.Threading.Thread.Sleep(250);
+        }
+        return target!=IntPtr.Zero&&TypeUrl(target,url);
+    }
+    internal static bool TypeUrl(IntPtr handle,string url) {
+        for(var attempt=0;attempt<6;attempt++) {
+            if(!IsWindow(handle)||!IsWindowVisible(handle))return false;
+            Foreground(handle);System.Threading.Thread.Sleep(attempt==0?600:300);
+            if(GetForegroundWindow()!=handle)continue;
+            Combo(true,0x4C);System.Threading.Thread.Sleep(200);   // Ctrl+L focuses the address bar
+            if(GetForegroundWindow()!=handle)return false;
+            Combo(true,0x56);System.Threading.Thread.Sleep(400);   // Ctrl+V pastes the management URL
+            if(GetForegroundWindow()!=handle)return false;
+            Combo(false,0x0D);                                     // Enter navigates to the pasted URL
+            return true;
+        }
+        return false;
+    }
+    static void Foreground(IntPtr handle) {
+        uint targetThread;GetWindowThreadProcessId(handle,out targetThread);
+        uint current=GetCurrentThreadId();
+        IntPtr fore=GetForegroundWindow();uint foreThread=0;
+        if(fore!=IntPtr.Zero)GetWindowThreadProcessId(fore,out foreThread);
+        if(foreThread!=0&&foreThread!=current)AttachThreadInput(current,foreThread,true);
+        if(targetThread!=current)AttachThreadInput(current,targetThread,true);
+        ShowWindow(handle,9);BringWindowToTop(handle);
+        if(attemptAlt) {Combo(false,0x12);attemptAlt=false;}   // a lone ALT tap unlocks SetForegroundWindow
+        SetForegroundWindow(handle);
+        SwitchToThisWindow(handle,false);
+        SetFocus(handle);
+        if(foreThread!=0&&foreThread!=current)AttachThreadInput(current,foreThread,false);
+        if(targetThread!=current)AttachThreadInput(current,targetThread,false);
+    }
+    static bool attemptAlt=true;
+    static void Combo(bool control,ushort key) {
+        if(control)Send(0x11,true);
+        Send(key,true);Send(key,false);
+        if(control)Send(0x11,false);
+    }
+    static void Send(ushort key,bool down) {
+        var input=new INPUT[1];
+        input[0].type=1;
+        input[0].union.keyboard=new KEYBDINPUT{virtualKey=key,flags=down?0u:2u};
+        SendInput(1,input,Marshal.SizeOf(typeof(INPUT)));
+    }
+}
+
 internal class SetupWindow:Form {
-    readonly ComboBox browser=new ComboBox();readonly Button install=new Button(),browse=new Button(),copy=new Button(),manage=new Button(),workbench=new Button();readonly TextBox folder=new TextBox(),managementAddress=new TextBox();readonly Label status=new Label(),loadPath=new Label();readonly string shortcutsOverride,testProfile;readonly bool noOpen;InstallResult installed;bool preparing,applyingResult,managementOpened;
+    readonly ComboBox browser=new ComboBox();readonly Button install=new Button(),browse=new Button(),copy=new Button(),manage=new Button(),workbench=new Button();readonly TextBox folder=new TextBox(),managementAddress=new TextBox();readonly Label status=new Label(),loadPath=new Label();readonly string shortcutsOverride,testProfile;readonly bool noOpen;InstallResult installed;bool preparing,applyingResult,managementOpened,lastAutomated;readonly Timer clipboardSwap=new Timer();
     internal event Action<InstallResult> Completed;
     public SetupWindow(string initialRoot=null,string shortcutsDir=null,bool skipBrowserLaunch=false,string browserTestProfile=null) {
         shortcutsOverride=shortcutsDir;noOpen=skipBrowserLaunch;testProfile=browserTestProfile;
@@ -174,27 +265,37 @@ internal class SetupWindow:Form {
         loadPath.SetBounds(30,299,615,46);loadPath.ForeColor=Color.FromArgb(87,112,84);Controls.Add(loadPath);
         folder.TextChanged+=delegate {UpdateLoadPath();if(!preparing&&!applyingResult){installed=null;copy.Enabled=workbench.Enabled=false;install.Enabled=true;install.Text="准备安装并打开浏览器";}};UpdateLoadPath();
         copy.Text="复制扩展加载目录";copy.SetBounds(30,353,170,36);copy.Enabled=false;copy.Click+=delegate {try{Clipboard.SetText(installed.folder);status.Text="扩展目录已复制。在浏览器的文件夹选择窗口按 Ctrl+V，然后确认。";}catch{status.Text="暂时无法访问剪贴板，请手动复制上方的扩展加载目录。";}};Controls.Add(copy);
-        manage.Text="打开浏览器并复制地址";manage.SetBounds(215,353,205,36);manage.Click+=delegate {OpenManagement();};Controls.Add(manage);
-        workbench.Text="加载完成后打开工作台";workbench.SetBounds(435,353,210,36);workbench.Enabled=false;workbench.Click+=delegate {try{Setup.Launch(installed.browserPath,installed.dashboardUrl);}catch(Exception error){status.Text="工作台未打开："+error.Message;}};Controls.Add(workbench);
+        manage.Text="打开扩展管理页";manage.SetBounds(215,353,205,36);manage.Click+=delegate {OpenManagement();};Controls.Add(manage);
+        workbench.Text="加载完成后打开工作台";workbench.SetBounds(435,353,210,36);workbench.Enabled=false;workbench.Click+=delegate {try{Setup.Launch(installed.browserPath,installed.dashboardUrl);status.Text="已请求打开工作台。若浏览器显示无法访问此页：请先在扩展管理页确认校事笺已加载，并使用加载扩展时的同一浏览器配置，然后重试。";}catch(Exception error){status.Text="工作台未打开："+error.Message;}};Controls.Add(workbench);
+        clipboardSwap.Interval=4000;clipboardSwap.Tick+=delegate {clipboardSwap.Stop();if(installed==null)return;try{Clipboard.SetText(installed.folder);status.Text="已把扩展加载目录放入剪贴板：点击“加载解压缩的扩展”后，在文件夹窗口按 Ctrl+V 选择该目录。";}catch{}};
         AddLabel("管理页地址",30,408,105,28);managementAddress.SetBounds(140,405,505,28);managementAddress.ReadOnly=true;Controls.Add(managementAddress);
         browser.SelectedIndexChanged+=delegate {UpdateManagementAddress();};UpdateManagementAddress();
-        AddLabel("① 在打开的浏览器按 Ctrl+L、Ctrl+V、回车，进入扩展管理页。\r\n② 开启开发人员模式，点击加载解压缩的扩展。\r\n③ 回到助手点“复制扩展加载目录”，在文件夹窗口粘贴并确认。",30,451,615,78);
-        status.SetBounds(30,543,615,62);status.Text="点击中间按钮，复制管理页地址并打开浏览器；准备文件前也可使用。";status.ForeColor=Color.FromArgb(87,112,84);Controls.Add(status);
+        AddLabel("① 浏览器会自动打开扩展管理页；若没有跳转，在地址栏按 Ctrl+V、回车。\r\n② 开启“开发人员模式”，点击“加载解压缩的扩展”，在文件夹窗口按 Ctrl+V 粘贴扩展目录。\r\n③ 加载完成，校事笺自动打开工作台；以后从桌面“校事笺”进入。",30,451,615,78);
+        status.SetBounds(30,543,615,62);status.Text="点击中间按钮，助手会打开浏览器并自动进入扩展管理页；准备文件前也可使用。";status.ForeColor=Color.FromArgb(87,112,84);Controls.Add(status);
         AddLabel("更换安装位置会改变本地扩展 ID。已有数据请先导出备份，再在新工作台恢复。",30,625,615,44);
         FormClosing+=delegate(object sender,FormClosingEventArgs e){if(preparing){e.Cancel=true;status.Text="正在校验和放置文件，请稍候完成后再关闭。";}};
     }
     void UpdateManagementAddress(){managementAddress.Text=(browser.SelectedIndex==0?"edge":"chrome")+"://extensions/";}
     void OpenManagement() {
-        managementOpened=false;bool copied=false;
+        managementOpened=false;lastAutomated=false;bool copied=false;
         try{Clipboard.SetText(managementAddress.Text);copied=true;}catch{}
+        List<IntPtr> before=BrowserAutomation.BrowserWindows();
         try {
-            Setup.Launch(Setup.FindBrowser(browser.SelectedIndex==0?"edge":"chrome"),"about:blank",testProfile);managementOpened=true;
-            status.Text=copied?"管理页地址已复制。请在浏览器按 Ctrl+L、Ctrl+V、回车；加载扩展时再点左侧复制目录。":"浏览器已打开，但剪贴板暂不可用。请在浏览器地址栏输入上方管理页地址并回车。";
+            Setup.Launch(Setup.FindBrowser(browser.SelectedIndex==0?"edge":"chrome"),"about:blank",testProfile,"--new-window");
+            managementOpened=true;
+            if(copied)lastAutomated=BrowserAutomation.NavigatePastedWindow(before,managementAddress.Text,7000);
+            if(lastAutomated) {
+                status.Text="已自动进入扩展管理页。若页面没有打开，请在地址栏按 Ctrl+V、回车。";
+                if(installed!=null)clipboardSwap.Start();
+            } else if(copied)status.Text=installed==null
+                ?"管理页地址已复制。请在浏览器地址栏按 Ctrl+V、回车进入扩展管理页；若焦点不在地址栏，先按 Ctrl+L。"
+                :"浏览器已打开。请在地址栏按 Ctrl+V、回车进入扩展管理页；也可点左侧“复制扩展加载目录”。";
+            else status.Text="浏览器已打开，但剪贴板暂不可用。请在浏览器地址栏输入上方管理页地址并回车。";
         }catch(Exception error){status.Text="浏览器未打开："+error.Message+" 请手动启动浏览器，在地址栏输入上方管理页地址。";}
     }
     internal bool TestManagementButton(string report) {
         manage.PerformClick();
-        File.WriteAllText(report,Setup.Json.Serialize(new {success=managementOpened,clipboardAddress=Clipboard.GetText(),managementAddress=managementAddress.Text,status=status.Text,buttonText=manage.Text,copyDirectoryEnabled=copy.Enabled}),new UTF8Encoding(false));return managementOpened;
+        File.WriteAllText(report,Setup.Json.Serialize(new {success=managementOpened,automated=lastAutomated,clipboardAddress=Clipboard.GetText(),managementAddress=managementAddress.Text,status=status.Text,buttonText=manage.Text,copyDirectoryEnabled=copy.Enabled}),new UTF8Encoding(false));return managementOpened;
     }
     void UpdateLoadPath(){try{loadPath.Text="扩展加载目录："+Path.Combine(folder.Text.Trim(),"Extension");}catch{loadPath.Text="请填写有效的安装位置。";}}
     void BrowseClick(object sender,EventArgs e) {

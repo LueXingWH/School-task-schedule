@@ -1,5 +1,7 @@
 import {chromium} from 'playwright';
+import {spawn,execSync} from 'node:child_process';
 import path from 'node:path';
+import {existsSync} from 'node:fs';
 import {readFile} from 'node:fs/promises';
 
 export const channel=process.env.TEST_BROWSER||'chrome';
@@ -10,6 +12,54 @@ export const outputDir=`test-results/${browserSlug}`;
 export const versionPage=channel==='msedge'?'edge://version':'chrome://version';
 export async function launchBrowser(profile,extra={}) {
   return chromium.launchPersistentContext(profile,{channel,headless:true,ignoreDefaultArgs:['--disable-extensions'],args:['--enable-unsafe-extension-debugging'],...extra});
+}
+export function browserExecutable() {
+  const candidates=channel==='msedge'
+    ?['C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe','C:/Program Files/Microsoft/Edge/Application/msedge.exe']
+    :['C:/Program Files/Google/Chrome/Application/chrome.exe','C:/Program Files (x86)/Google/Chrome/Application/chrome.exe'];
+  for(const candidate of candidates)if(existsSync(candidate))return candidate;
+  throw Error(`未找到 ${browserName} 可执行文件`);
+}
+let attachedPort=9800;
+// 直接 spawn 浏览器并用 CDP 附加，贴近安装助手面对的真实形态（外部进程交接对新窗口的处理
+// 在 Playwright launchPersistentContext 托管的实例上不可见，见 test-results/exp 调试记录）。
+export async function launchAttachedBrowser(profile) {
+  // 本地 CDP 调试端口绝不能走系统/环境代理：沙箱注入的 HTTPS_PROXY 会把 127.0.0.1 请求
+// 转发到外部代理并返回 502。仅在附加启动这条链路里清理。
+  for(const key of ['HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','http_proxy','https_proxy','all_proxy'])delete process.env[key];
+  process.env.NO_PROXY='127.0.0.1,localhost';
+  const executable=browserExecutable();const port=attachedPort++;
+  const child=spawn(executable,['--user-data-dir='+path.resolve(profile),'--no-first-run','--remote-debugging-port='+port,'--window-position=-20000,-20000','--window-size=1280,900','--enable-unsafe-extension-debugging'],{stdio:'ignore'});
+  const endpoint='http://127.0.0.1:'+port;
+  let browser;
+  for(let attempt=0;attempt<3&&!browser;attempt++) {
+    for(let i=0;i<100;i++){try{const response=await fetch(endpoint+'/json/version');if(response.ok)break;}catch{}await new Promise(resolve=>setTimeout(resolve,300));}
+    try{browser=await chromium.connectOverCDP(endpoint);}catch{await new Promise(resolve=>setTimeout(resolve,2000));}
+  }
+  if(!browser){
+    try{
+      execSync(`powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"Name='${channel==='msedge'?'msedge':'chrome'}.exe'\\" | Where-Object { $_.CommandLine -like '*${path.resolve(profile).replace(/'/g,"''")}*' } | Select-Object ProcessId,CommandLine | ConvertTo-Json | Out-File -Encoding utf8 'test-results/exp/attach-fail.json'"`,{stdio:'pipe',timeout:30000});
+    }catch{}
+    throw Error('无法通过 CDP 附加到 '+browserName+'（'+endpoint+'）');
+  }
+  // connectOverCDP 的 browser.close() 只断开连接；CDP Browser.close 通常能优雅退出，
+  // 但个别场景（如测试中被外部进程多次交接后）会失效，此时按调试端口定位真实主进程整树结束。
+  const waitDead=async()=>{
+    const deadline=Date.now()+10000;
+    while(Date.now()<deadline){try{await fetch(endpoint+'/json/version');await new Promise(resolve=>setTimeout(resolve,300));}catch{return true;}}
+    return false;
+  };
+  const close=async()=>{
+    try{const cdp=await browser.newBrowserCDPSession();await cdp.send('Browser.close');}catch{}
+    let dead=await waitDead();
+    if(!dead) {
+      try{execSync(`powershell -NoProfile -Command "$p=Get-CimInstance Win32_Process -Filter \\"Name='${channel==='msedge'?'msedge':'chrome'}.exe'\\" | Where-Object { $_.CommandLine -match '--remote-debugging-port=${port}\\b' -and $_.CommandLine -notmatch '--type=' }; if($p){taskkill /PID $($p.ProcessId) /T /F | Out-Null}"`,{stdio:'pipe',timeout:30000});}catch{}
+      dead=await waitDead();
+    }
+    if(!dead)try{child.kill();}catch{}
+    await new Promise(resolve=>setTimeout(resolve,600));
+  };
+  return {browser,context:browser.contexts()[0],child,endpoint,close};
 }
 export async function loadExtension(context,folder) {
   const cdp=await context.browser().newBrowserCDPSession();
