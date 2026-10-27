@@ -1,10 +1,29 @@
 {
-  "manifest_version": 3, "name": "校事笺", "version": "1.1.0",
+  "manifest_version": 3,
+  "name": "校事笺",
+  "version": "1.2.0",
   "description": "把校园通知、截图和附件收进本地工作台，核对截止日、安排任务、准备材料。",
   "minimum_chrome_version": "154",
-  "permissions": ["activeTab", "scripting", "storage"],
-  "action": { "default_popup": "popup.html", "default_title": "校事笺", "default_icon": "icons/48.png" },
-  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" },
-  "background": { "service_worker": "background.js", "type": "module" },
-  "content_security_policy": { "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; connect-src 'self'; worker-src 'self'; img-src 'self' blob: data:;" }
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "校事笺",
+    "default_icon": "icons/48.png"
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; connect-src 'self'; worker-src 'self'; img-src 'self' blob: data:;"
+  }
 }

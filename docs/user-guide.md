@@ -2,6 +2,8 @@
 
 ## 安装与开始
 
+可直接使用单文件便捷安装助手 `xiaoshijian-1.2.0-setup.exe` 自动准备资源、入口和目录；在浏览器首次确认加载后，默认设置和欢迎页会自动出现。无需手动填写配置。完整步骤、EXE 来源确认和旧版迁移见 `install-assistant.md`。
+
 支持 Windows Microsoft Edge 和 Google Chrome，本轮实测 Edge 156 / Chrome 154。解压对应生产 ZIP → Edge 打开 `edge://extensions`、开启开发人员模式（Chrome 为 `chrome://extensions`、开发者模式）→ “加载解压缩的扩展 / 加载已解压的扩展程序” → 选择有 `manifest.json` 的扩展文件夹。固定工具栏图标，点击“打开我的工作台”。不需要启动终端或服务器。Edge 的详细安装与迁移见 `edge-guide.md`。
 
 ## 收录通知

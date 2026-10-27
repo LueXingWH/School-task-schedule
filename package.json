@@ -1,12 +1,12 @@
 {
   "name": "xiaoshijian",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "assets": "node scripts/assets.mjs",
-    "build": "npm run assets && tsc --noEmit && vite build && node scripts/package.mjs",
+    "build": "npm run assets && tsc --noEmit && vite build && node scripts/package.mjs && node scripts/build-installer.mjs",
     "test": "vitest run",
     "test:e2e": "node tests/browser.mjs",
     "fixtures": "node tests/fixtures.mjs",
@@ -17,7 +17,8 @@
     "test:edge": "node tests/run-browser.mjs msedge",
     "test:chrome": "node tests/run-browser.mjs chrome",
     "test:matrix": "node tests/run-browser.mjs matrix",
-    "test:public:edge": "node tests/run-browser.mjs msedge public"
+    "test:public:edge": "node tests/run-browser.mjs msedge public",
+    "test:setup": "node tests/setup.mjs"
   },
   "dependencies": {
     "dexie": "4.4.7",

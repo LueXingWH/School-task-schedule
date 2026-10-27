@@ -1,4 +1,9 @@
-校事笺 1.1.0 · Edge / Chrome 本地试用版
+校事笺 1.2.0 · Edge / Chrome 本地试用版
+
+可直接使用单独提供的 xiaoshijian-1.2.0-setup.exe。
+助手自动放置资源、创建入口、复制目录并打开浏览器安装页。
+首次仍需浏览器确认加载；加载后默认配置和欢迎页自动就绪。
+本文件夹也可以按下列方式手动加载。
 
 支持 Windows Microsoft Edge 与 Google Chrome，实测 Edge 156 / Chrome 154。
 解压后，在 Edge 地址栏输入 edge://extensions

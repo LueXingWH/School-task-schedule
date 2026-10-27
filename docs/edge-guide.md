@@ -1,10 +1,14 @@
 # Microsoft Edge 安装、升级与迁移
 
-校事笺 1.1.0 已在 Windows Microsoft Edge **156.0.4314.42** 实际加载验证。使用本机安装的 Edge，测试没有用 Chromium 或 Chrome 代替。核心处理仍在本地，无模型 API、密钥、Python 或服务器。
+校事笺 1.2.0 已在 Windows Microsoft Edge **156.0.4314.42** 实际加载验证。使用本机安装的 Edge，测试没有用 Chromium 或 Chrome 代替。核心处理仍在本地，无模型 API、密钥、Python 或服务器。
 
 ## 第一次安装
 
-1. 解压 `xiaoshijian-1.1.0-edge.zip` 到固定目录；完整交付包则使用其中的 `extension` 文件夹。
+推荐双击 `xiaoshijian-1.2.0-setup.exe`，助手自动放置文件、创建入口、复制路径并打开 Edge。首次仍在 Edge 确认加载，随后默认设置和欢迎页自动就绪，见 `install-assistant.md`。从旧目录切换请先导出备份。
+
+原 ZIP 手动方式仍保留：
+
+1. 解压 `xiaoshijian-1.2.0-edge.zip` 到固定目录；完整交付包则使用其中的 `extension` 文件夹。
 2. Edge 地址栏输入 `edge://extensions`。
 3. 开启“开发人员模式”，点击“加载解压缩的扩展”（Load unpacked）。
 4. 选择包含 `manifest.json` 的文件夹。不要选择 ZIP 本身或源码目录。

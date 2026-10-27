@@ -2,6 +2,12 @@
 
 这份交付包包含可安装扩展、完整源码和实际测试证据。产品无需 Node、Python、服务器、账号或 API 密钥。
 
+最省步骤：使用单独提供的 `xiaoshijian-1.2.0-setup.exe`，无需先解压 ZIP。完整交付 ZIP 内也包含同名助手。
+
+双击助手 → 点击“准备安装并打开浏览器” → 在浏览器首次确认加载已复制的目录。加载后工作台与默认配置自动就绪。详细限制和已有数据迁移见 `source/docs/install-assistant.md`。
+
+如果选择原 ZIP 手动方式：
+
 1. 将整个 ZIP 解压到固定目录。
 2. Edge 打开 `edge://extensions`，开启“开发人员模式”；Chrome 打开 `chrome://extensions`，开启“开发者模式”。本轮实测 Edge 156 / Chrome 154。
 3. 点击“加载已解压的扩展程序”，选择本包 **extension** 文件夹（里面有 `manifest.json`）。
@@ -10,6 +16,8 @@
 不要把 `source` 文件夹当作扩展安装；`source` 是开发源码，需构建后才可加载。本包已提供构建好的 `extension`，普通使用无需构建。
 
 - 使用指南：`source/docs/user-guide.md`
+- 安装助手：`source/docs/install-assistant.md`
+- 商店提交材料与隐私说明：`source/docs/store-submission.md`、`source/docs/privacy-policy.md`
 - Edge 安装与 Chrome 数据迁移：`source/docs/edge-guide.md`
 - 真实验收：`source/docs/acceptance.md`，原始日志和截图在 `evidence`
 - 支持边界：`source/docs/known-limitations.md`

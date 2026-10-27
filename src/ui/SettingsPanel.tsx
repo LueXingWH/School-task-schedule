@@ -3,7 +3,7 @@ import {clearData} from '../db';
 import {makeBackup,readBackup,restoreBackup,download} from '../backup';
 import {localDay} from '../schedule';
 import {type Settings} from '../model';
-const defaults:Settings={upcomingDays:7,sort:'deadline',compact:false};
+import {DEFAULT_SETTINGS as defaults} from '../settings';
 export async function loadSettings():Promise<Settings>{if(!globalThis.chrome?.storage)return defaults;const value=(await chrome.storage.local.get('settings')).settings as Partial<Settings>|undefined;return {...defaults,...value};}
 export function SettingsPanel({settings,onSettings}:{settings:Settings;onSettings:(s:Settings)=>void}){const [usage,setUsage]=useState<StorageEstimate>();const [message,setMessage]=useState('');const [busy,setBusy]=useState(false);const [restore,setRestore]=useState<Awaited<ReturnType<typeof readBackup>>>();const [clear,setClear]=useState(false);const [phrase,setPhrase]=useState('');
   useEffect(()=>{void navigator.storage.estimate().then(setUsage);},[]);

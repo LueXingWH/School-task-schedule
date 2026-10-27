@@ -1,6 +1,15 @@
 import { addSource, db } from './db';
 import { safeURL, LIMITS } from './model';
+import { DEFAULT_SETTINGS } from './settings';
 const open=async(hash='')=>chrome.tabs.create({url:chrome.runtime.getURL('dashboard.html')+hash});
+chrome.runtime.onInstalled.addListener(details=>{
+  void (async()=>{
+    const saved=await chrome.storage.local.get(['settings','welcomeShown']);
+    const firstWelcome=details.reason==='install'&&saved.welcomeShown!==true;
+    await chrome.storage.local.set({settings:{...DEFAULT_SETTINGS,...(saved.settings as object||{})},...(firstWelcome?{welcomeShown:true}:{})});
+    if(firstWelcome)await open('#welcome');
+  })();
+});
 chrome.runtime.onMessage.addListener((msg,_sender,respond)=>{
   if(msg?.type==='open'){void open(msg.hash||'').then(()=>respond({ok:true}));return true;}
   if(msg?.type==='save-capture') {
