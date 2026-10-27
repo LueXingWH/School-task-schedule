@@ -1,4 +1,4 @@
-# 校事笺 1.0.0
+# 校事笺 1.1.0
 
 本地校园通知管理扩展。把群消息、网页、截图、PDF 与 DOCX 收进工作台，核对截止日，安排个人任务，逐项准备材料。
 
@@ -6,14 +6,14 @@
 
 ## 安装
 
-1. 将 `release/xiaoshijian-1.0.0-chrome.zip` 解压到固定文件夹，或直接使用本项目 `dist`。
-2. Chrome 地址栏输入 `chrome://extensions`，打开右上角“开发者模式”。
+1. 使用 Windows Microsoft Edge 或 Google Chrome，将 `release/xiaoshijian-1.1.0-edge.zip`（或 `-chrome.zip`）解压到固定文件夹，也可直接使用本项目 `dist`。本轮实测 Edge 156、Chrome 154。
+2. Edge 地址栏输入 `edge://extensions`，开启“开发人员模式”；Chrome 输入 `chrome://extensions`，开启“开发者模式”。
 3. 点击“加载已解压的扩展程序”，选择包含 `manifest.json` 的文件夹（本项目为 `dist`）。
 4. 在工具栏“扩展程序”里固定“校事笺”，点击图标，打开工作台。
 
 尚未上架商店，不能双击 ZIP 安装。请保留扩展文件夹，不要把它放在会自动清理的临时目录。升级前先导出备份。
 
-详细操作见 [中文使用指南](docs/user-guide.md)，真实验收见 [验收记录](docs/acceptance.md)。
+Edge 安装与 Chrome 数据迁移见 [Edge 专用指南](docs/edge-guide.md)，日常操作见 [中文使用指南](docs/user-guide.md)，真实验收见 [验收记录](docs/acceptance.md)。Chrome 与 Edge 各自保存本地数据，可通过完整备份迁移。
 
 ## 开发与验证
 
@@ -25,14 +25,17 @@ npm.cmd test
 npm.cmd run build
 npm.cmd run fixtures
 npm.cmd run test:e2e
-node tests/install.mjs
+npm.cmd run test:matrix
+npm.cmd run deliver
 ```
 
 `build` 首次从固定 Git 提交下载 OCR 语言文件并核对 SHA-256；后续缓存于 `public/vendor`。依赖和资源下载只发生在开发构建期间。构建产物 `dist` 已包含 Worker、WASM、语言数据、PDF 字体/CMap/ICC 与许可。
 
 `npm.cmd run dev` 只用于界面预览，不是产品运行方式；网页采集、生产 CSP 和离线解析以实际加载 `dist` 的 MV3 验收为准。
 
-真实 Chrome 自动化使用独立配置文件和 CDP 的 `Extensions.loadUnpacked/triggerAction`，不会更改你的日常 Chrome 数据。测试所需 Chrome 安装在标准位置，测试文件生成于 `tests/fixtures`，结果在 `test-results`。测试脚本不返回预设 OCR 或附件解析结果。
+真实 Chrome / Edge 自动化使用独立配置文件和 CDP 的 `Extensions.loadUnpacked/triggerAction`，不会更改你的日常浏览器数据。`test:matrix` 依次在实际 Chrome 和 Edge 运行核心与 ZIP 安装测试；也可单独运行 `test:chrome` 或 `test:edge`。结果分别保存到 `test-results/chrome` 和 `test-results/edge`。Edge 的迁移验收使用 Chrome 测试生成的备份，因此首次请先运行完整 matrix。测试脚本不返回预设 OCR 或附件解析结果。
+
+`npm.cmd run test:public:edge` 可额外在 Edge 验证公开校园通知页（此项需要该网站可访问）。`deliver` 检查当前版本两个浏览器的实际验收结果后，生成 Edge/Chrome 安装 ZIP、源码 ZIP、完整交付 ZIP 和 SHA-256 清单。
 
 ## 目录
 

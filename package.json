@@ -1,6 +1,6 @@
 {
   "name": "xiaoshijian",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,7 +13,11 @@
     "test:install": "node tests/install.mjs",
     "test:public": "node tests/public-web.mjs",
     "test:clean": "node scripts/clean-check.mjs",
-    "deliver": "node scripts/deliver.mjs"
+    "deliver": "node scripts/deliver.mjs",
+    "test:edge": "node tests/run-browser.mjs msedge",
+    "test:chrome": "node tests/run-browser.mjs chrome",
+    "test:matrix": "node tests/run-browser.mjs matrix",
+    "test:public:edge": "node tests/run-browser.mjs msedge public"
   },
   "dependencies": {
     "dexie": "4.4.7",

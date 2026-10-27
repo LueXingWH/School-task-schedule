@@ -24,5 +24,6 @@ OCR 简中/英文数据来自官方 [tessdata_fast](https://github.com/tesseract
 - [PDF.js 示例](https://mozilla.github.io/pdf.js/examples/)
 - [Mammoth](https://github.com/mwilliamson/mammoth.js)；文档树 transformDocument 用于保留表格行，生成 HTML 不注入页面。
 - [Chrome CDP Extensions](https://chromedevtools.github.io/devtools-protocol/tot/Extensions/)；用于全新测试配置真实安装和触发工具栏 action。
+- [Microsoft Edge 扩展移植](https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/port-chrome-extension) / [本地安装](https://learn.microsoft.com/en-us/microsoft-edge/extensions/getting-started/extension-sideloading)；共享 MV3/API，支持范围经真实 Edge 单独验收。
 
 本项目源码的对外授权由所有者决定；此交付不代表公开发布或自动授予第三方使用许可。

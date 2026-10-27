@@ -1,7 +1,9 @@
-校事笺 1.0.0 · 本地试用版
+校事笺 1.1.0 · Edge / Chrome 本地试用版
 
-解压后，在 Chrome 地址栏输入 chrome://extensions
-开启“开发者模式”，点击“加载已解压的扩展程序”。
+支持 Windows Microsoft Edge 与 Google Chrome，实测 Edge 156 / Chrome 154。
+解压后，在 Edge 地址栏输入 edge://extensions
+开启“开发人员模式”，点击“加载解压缩的扩展”。
+Chrome 可在 chrome://extensions 开启“开发者模式”并加载。
 选择本文件和 manifest.json 所在的文件夹。
 固定工具栏中的“校事笺”，点击图标打开工作台。
 
@@ -10,4 +12,5 @@
 尚未上架商店，不能双击 ZIP 安装。请保留扩展文件夹。
 
 设置页可导出/恢复完整备份。卸载或清除数据前请备份。
+Chrome 与 Edge 的数据各自保存；在原浏览器导出完整备份，可在目标浏览器恢复。
 OCR 和规则候选请对照原文人工核对。
