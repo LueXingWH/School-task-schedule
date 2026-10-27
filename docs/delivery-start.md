@@ -2,7 +2,7 @@
 
 这份交付包包含可安装扩展、完整源码和实际测试证据。产品无需 Node、Python、服务器、账号或 API 密钥。
 
-最省步骤：使用单独提供的 `xiaoshijian-1.2.0-setup.exe`，无需先解压 ZIP。完整交付 ZIP 内也包含同名助手。
+最省步骤：使用单独提供的 `xiaoshijian-1.2.1-setup.exe`，无需先解压 ZIP。完整交付 ZIP 内也包含同名助手。
 
 双击助手 → 点击“准备安装并打开浏览器” → 在浏览器首次确认加载已复制的目录。加载后工作台与默认配置自动就绪。详细限制和已有数据迁移见 `source/docs/install-assistant.md`。
 

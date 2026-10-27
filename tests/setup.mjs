@@ -8,18 +8,18 @@ import {createHash} from 'node:crypto';
 process.env.TEST_BROWSER=process.env.TEST_BROWSER||'msedge';
 const {launchBrowser,loadExtension}=await import('./browser-support.mjs');
 const run=promisify(execFile),{version}=JSON.parse(await readFile('package.json','utf8'));
-const out=path.resolve('test-results/setup-'+Date.now()),root=path.join(out,'中文 用户 路径','Xiaoshijian'),desktop=path.join(out,'测试桌面');await mkdir(out,{recursive:true});
+const out=path.resolve('test-results/setup-'+Date.now()),root=path.join(out,'中文 用户 路径','我选择的安装目录'),desktop=path.join(out,'测试桌面');await mkdir(out,{recursive:true});
 const executable=path.resolve(`release/xiaoshijian-${version}-setup.exe`),results=[];
 let context;
 const launchSetupBrowser=profile=>launchBrowser(profile,{headless:false,args:['--enable-unsafe-extension-debugging','--window-position=-20000,-20000']});
-async function prepare(){const report=path.join(out,'native-result.json');await run(executable,['--install-only','--root',root,'--shortcuts-dir',desktop,'--browser',process.env.TEST_BROWSER==='chrome'?'chrome':'edge','--result',report],{windowsHide:true,timeout:60000});return JSON.parse(await readFile(report,'utf8'));}
+async function prepare(useUI=false,target=root){const report=path.join(out,'native-result.json');await run(executable,[useUI?'--ui-install-only':'--install-only','--root',target,'--shortcuts-dir',desktop,'--browser',process.env.TEST_BROWSER==='chrome'?'chrome':'edge','--result',report],{windowsHide:true,timeout:60000});return JSON.parse(await readFile(report,'utf8'));}
 async function wait(fn){for(let i=0;i<100;i++){const value=await fn();if(value)return value;await new Promise(r=>setTimeout(r,150));}throw Error('Setup browser validation timed out');}
 try {
   await run(executable,['--preview',path.join(out,'setup-preview.png')],{windowsHide:true,timeout:30000});results.push('实际 EXE 渲染安装助手界面');
-  const installed=await prepare();assert(installed.success);assert(installed.manualConfirmationRequired);assert(installed.shortcutCreated);assert.equal(installed.version,version);
+  const installed=await prepare(true);assert.equal(installed.folder,path.join(root,'Extension'));assert(installed.success);assert(installed.manualConfirmationRequired);assert(installed.shortcutCreated);assert.equal(installed.version,version);
   const archive=unzipSync(new Uint8Array(await readFile(`release/xiaoshijian-${version}-edge.zip`)));
   for(const [name,bytes] of Object.entries(archive))assert(Buffer.from(bytes).equals(await readFile(path.join(installed.folder,name))));
-  results.push('真实 EXE 在含中文和空格的路径准备全部扩展文件，逐文件与 ZIP 字节核对');
+  results.push('真实 WinForms 输入框和安装按钮使用自选中文/空格目录，逐文件与 ZIP 字节核对');
   const shortcut=JSON.parse((await run('powershell.exe',['-NoProfile','-NonInteractive','-File',path.resolve('tests/inspect-shortcut.ps1'),'-Path',path.join(desktop,'校事笺.lnk')],{windowsHide:true,encoding:'utf8'})).stdout.replace(/^\uFEFF/,''));
   assert.equal(shortcut.target.toLowerCase(),installed.browserPath.toLowerCase());assert.equal(shortcut.arguments,`"${installed.dashboardUrl}"`);results.push('真实 Windows 桌面快捷方式目标和工作台参数正确');
   const profile=path.resolve(`.test-profile-setup-${Date.now()}`);context=await launchSetupBrowser(profile);const runtime=await loadExtension(context,installed.folder);assert.equal(runtime.id,installed.extensionId);
@@ -30,6 +30,10 @@ try {
   const upgraded=await prepare();assert.equal(upgraded.folder,installed.folder);assert.equal(upgraded.extensionId,installed.extensionId);assert.equal(await readFile(path.join(root,'用户自留文件.txt'),'utf8'),'不得覆盖');assert((await readdir(root)).some(n=>n.startsWith('.previous-')));
   context=await launchSetupBrowser(profile);const second=await loadExtension(context,upgraded.folder);const reopened=await context.newPage();await reopened.goto(noticeURL);await reopened.getByLabel('准备 报名表',{exact:true}).waitFor();assert(await reopened.getByLabel('准备 报名表',{exact:true}).isChecked());assert.deepEqual((await reopened.evaluate(()=>chrome.storage.local.get('settings'))).settings,{upcomingDays:12,sort:'created',compact:true});
   await new Promise(r=>setTimeout(r,500));assert(!context.pages().some(p=>p.url()===second.base+'/dashboard.html#welcome'));results.push('重复准备及浏览器重启后路径/ID 不变，原文件备份、通知、勾选和自定义配置保留；不会重复弹欢迎页');
-  const bad=path.join(out,'不得写入的目录'),report=path.join(out,'rejected.json');let rejected=false;try{await run(executable,['--install-only','--root',bad,'--shortcuts-dir',desktop,'--result',report],{windowsHide:true});}catch{rejected=true;}assert(rejected);assert.equal(JSON.parse(await readFile(report,'utf8')).success,false);results.push('拒绝非项目命名目录，原有安装仍保留');
+  const alternate=path.join(out,'另一个安装位置'),moved=await prepare(false,alternate);assert.notEqual(moved.extensionId,installed.extensionId);assert.equal(moved.folder,path.join(alternate,'Extension'));assert.equal(await readFile(path.join(root,'用户自留文件.txt'),'utf8'),'不得覆盖');
+  const other=await loadExtension(context,moved.folder);const empty=await context.newPage();await empty.goto(other.base+'/dashboard.html');await empty.getByText('这里等着你的第一份通知').waitFor();assert(await reopened.getByLabel('准备 报名表',{exact:true}).isChecked());results.push('另选任意名称的新目录可安装，ID 正确变化，旧安装和旧数据保留，新目录不伪装已迁移数据');
+  const occupied=path.join(out,'已有文件的目录');await mkdir(occupied);await writeFile(path.join(occupied,'重要文件.txt'),'不得覆盖');
+  for(const bad of [path.parse(root).root,'relative-folder',occupied]){const report=path.join(out,'rejected.json');let rejected=false;try{await run(executable,['--install-only','--root',bad,'--shortcuts-dir',desktop,'--result',report],{windowsHide:true});}catch{rejected=true;}assert(rejected);assert.equal(JSON.parse(await readFile(report,'utf8')).success,false);}
+  assert.equal(await readFile(path.join(occupied,'重要文件.txt'),'utf8'),'不得覆盖');results.push('拒绝磁盘根目录、相对路径和非空未管理目录，原有文件不改动');
   const hash=createHash('sha256').update(await readFile(executable)).digest('hex');await writeFile('test-results/setup-results.json',JSON.stringify({status:'PASS',version,browser:runtime.browser,browserVersion:runtime.browserVersion,executableSHA256:hash,manualConfirmationRequired:true,results,preview:path.join(out,'setup-preview.png')},null,2));console.log(results.join('\n'));
 }catch(e){process.exitCode=1;console.error(e);await writeFile('test-results/setup-results.json',JSON.stringify({status:'FAIL',version,results,error:String(e)},null,2));}finally{await context?.close();}

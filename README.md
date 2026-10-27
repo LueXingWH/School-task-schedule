@@ -1,4 +1,4 @@
-# 校事笺 1.2.0
+# 校事笺 1.2.1
 
 本地校园通知管理扩展。把群消息、网页、截图、PDF 与 DOCX 收进工作台，核对截止日，安排个人任务，逐项准备材料。
 
@@ -6,13 +6,13 @@
 
 ## 安装
 
-推荐直接双击 `release/xiaoshijian-1.2.0-setup.exe`，点击“准备安装并打开浏览器”。助手自动放置资源、创建桌面入口、复制目录并打开 Edge；首次只需在浏览器中开启开发人员模式、点击加载解压缩扩展并粘贴目录。加载后默认设置与欢迎页自动就绪。以后可从桌面一键打开。
+推荐直接双击 `release/xiaoshijian-1.2.1-setup.exe`，可点击“浏览…”选择安装位置或直接修改路径，然后点击“准备安装并打开浏览器”。助手自动放置资源、创建桌面入口、复制扩展加载目录并打开 Edge；首次只需在浏览器中开启开发人员模式、点击加载解压缩扩展并粘贴目录。加载后默认设置与欢迎页自动就绪。以后可从桌面一键打开。
 
 详细步骤与迁移见 [安装助手指南](docs/install-assistant.md)。当前尚未上架商店，助手保留浏览器首次加载确认，不能称为无确认的静默安装。真正的商店“获取 / 添加”方式需要发布审核，已准备 [提交材料](docs/store-submission.md)。
 
 仍可使用原 ZIP 方式：
 
-1. 使用 Windows Microsoft Edge 或 Google Chrome，将 `release/xiaoshijian-1.2.0-edge.zip`（或 `-chrome.zip`）解压到固定文件夹，也可直接使用本项目 `dist`。本轮实测 Edge 156、Chrome 154。
+1. 使用 Windows Microsoft Edge 或 Google Chrome，将 `release/xiaoshijian-1.2.1-edge.zip`（或 `-chrome.zip`）解压到固定文件夹，也可直接使用本项目 `dist`。本轮实测 Edge 156、Chrome 154。
 2. Edge 地址栏输入 `edge://extensions`，开启“开发人员模式”；Chrome 输入 `chrome://extensions`，开启“开发者模式”。
 3. 点击“加载已解压的扩展程序”，选择包含 `manifest.json` 的文件夹（本项目为 `dist`）。
 4. 在工具栏“扩展程序”里固定“校事笺”，点击图标，打开工作台。

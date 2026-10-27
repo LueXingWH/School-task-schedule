@@ -34,6 +34,17 @@ internal static class Setup {
                 var result = System.Threading.Tasks.Task.Run(()=>Install(root, shortcuts, Value(args, "--browser") ?? "edge", delegate(string s) {})).GetAwaiter().GetResult();
                 File.WriteAllText(resultFile, Json.Serialize(result), new UTF8Encoding(false)); return 0;
             }
+            if(args.Contains("--ui-install-only")) {
+                string root=Value(args,"--root"),shortcuts=Value(args,"--shortcuts-dir");
+                if(String.IsNullOrEmpty(root)||String.IsNullOrEmpty(shortcuts)||String.IsNullOrEmpty(resultFile))throw new Exception("界面测试必须指定 root、shortcuts-dir 和 result。");
+                Application.EnableVisualStyles();bool success=false;
+                using(var form=new SetupWindow(root,shortcuts,true)) {
+                    form.StartPosition=FormStartPosition.Manual;form.Location=new Point(-20000,-20000);form.ShowInTaskbar=false;
+                    form.Completed+=result=>{success=result.success;File.WriteAllText(resultFile,Json.Serialize(result),new UTF8Encoding(false));form.BeginInvoke(new Action(()=>form.Close()));};
+                    form.Shown+=delegate {form.ChooseBrowser(Value(args,"--browser")??"edge");form.StartPreparation();};Application.Run(form);
+                }
+                return success?0:1;
+            }
             Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false); Application.Run(new SetupWindow()); return 0;
         } catch (Exception error) {
             if (!String.IsNullOrEmpty(resultFile)) File.WriteAllText(resultFile, Json.Serialize(new InstallResult {success=false,error=error.Message}),new UTF8Encoding(false));
@@ -61,9 +72,15 @@ internal static class Setup {
         int major; if(!Int32.TryParse(FileVersionInfo.GetVersionInfo(browserPath).ProductVersion.Split('.')[0],out major)||major<154)throw new Exception("所选浏览器版本过旧，请先更新浏览器。本版要求 Chromium 154 或更新版本。");
     }
     static string OwnedRoot(string root) {
+        if(String.IsNullOrWhiteSpace(root)||!Path.IsPathRooted(root)||Path.GetPathRoot(root).Length<3)throw new Exception("请输入完整的安装路径，例如 D:\\应用\\校事笺。");
         string full=Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
-        if(!String.Equals(Path.GetFileName(full),"Xiaoshijian",StringComparison.OrdinalIgnoreCase))throw new Exception("安装目录末级必须为 Xiaoshijian。");
+        if(String.Equals(full,Path.GetPathRoot(full).TrimEnd(Path.DirectorySeparatorChar),StringComparison.OrdinalIgnoreCase))throw new Exception("请选择专用文件夹，不能直接安装到磁盘或共享根目录。");
         for(var current=new DirectoryInfo(full);current!=null;current=current.Parent)if(current.Exists&&(current.Attributes&FileAttributes.ReparsePoint)!=0)throw new Exception("安装目录不能经过符号链接或目录联接。");
+        if(Directory.Exists(full)&&Directory.EnumerateFileSystemEntries(full).Any()) {
+            string receipt=Path.Combine(full,"install-receipt.json");InstallResult existing=null;
+            try {if(File.Exists(receipt))existing=Json.Deserialize<InstallResult>(File.ReadAllText(receipt));}catch {}
+            if(existing==null||!existing.success||!String.Equals(existing.folder,Path.Combine(full,"Extension"),StringComparison.OrdinalIgnoreCase)||existing.extensionId!=ExtensionId(Path.Combine(full,"Extension")))throw new Exception("此目录已有其他文件，已保留。请选择空文件夹、新建专用文件夹，或选择原安装目录更新。");
+        }
         return full;
     }
     static void RemoveStaging(string folder,string root) {
@@ -124,31 +141,50 @@ internal static class Setup {
 }
 
 internal class SetupWindow:Form {
-    readonly ComboBox browser=new ComboBox();readonly Button install=new Button(),copy=new Button(),manage=new Button(),workbench=new Button();readonly TextBox folder=new TextBox();readonly Label status=new Label();InstallResult installed;bool preparing;
-    public SetupWindow() {
-        Text="校事笺 · 便捷安装助手 "+Setup.Plan.version;Size=new Size(700,560);MinimumSize=Size;MaximumSize=Size;StartPosition=FormStartPosition.CenterScreen;Font=new Font("Microsoft YaHei UI",10);BackColor=Color.FromArgb(246,248,242);AutoScaleMode=AutoScaleMode.Dpi;MaximizeBox=false;
+    readonly ComboBox browser=new ComboBox();readonly Button install=new Button(),browse=new Button(),copy=new Button(),manage=new Button(),workbench=new Button();readonly TextBox folder=new TextBox();readonly Label status=new Label(),loadPath=new Label();readonly string shortcutsOverride;readonly bool noOpen;InstallResult installed;bool preparing,applyingResult;
+    internal event Action<InstallResult> Completed;
+    public SetupWindow(string initialRoot=null,string shortcutsDir=null,bool skipBrowserLaunch=false) {
+        shortcutsOverride=shortcutsDir;noOpen=skipBrowserLaunch;
+        Text="校事笺 · 便捷安装助手 "+Setup.Plan.version;Size=new Size(700,640);MinimumSize=Size;MaximumSize=Size;StartPosition=FormStartPosition.CenterScreen;Font=new Font("Microsoft YaHei UI",10);BackColor=Color.FromArgb(246,248,242);AutoScaleMode=AutoScaleMode.Dpi;MaximizeBox=false;
         var title=new Label {Text="收好通知，安装也轻一点",Font=new Font(Font.FontFamily,21,FontStyle.Bold),ForeColor=Color.FromArgb(23,111,98),Location=new Point(30,26),AutoSize=true};Controls.Add(title);
         AddLabel("自动放置离线资源 · 创建桌面入口 · 首次加载后自动配置",30,82,630,30);
         AddLabel("本助手准备本地文件。首次仍需在浏览器中开启开发人员模式并确认加载。",30,121,630,42);
         browser.SetBounds(30,174,260,36);browser.DropDownStyle=ComboBoxStyle.DropDownList;browser.Items.AddRange(new object[]{"Microsoft Edge（推荐）","Google Chrome"});browser.SelectedIndex=Setup.FindBrowser("edge")!=null?0:1;Controls.Add(browser);
         install.Text="准备安装并打开浏览器";install.SetBounds(315,169,330,43);install.BackColor=Color.FromArgb(23,111,98);install.ForeColor=Color.White;install.FlatStyle=FlatStyle.Flat;install.Click+=InstallClick;Controls.Add(install);
-        folder.SetBounds(30,232,615,28);folder.ReadOnly=true;folder.Text=Path.Combine(Setup.DefaultRoot,"Extension");Controls.Add(folder);
-        copy.Text="复制安装目录";copy.SetBounds(30,277,170,36);copy.Enabled=false;copy.Click+=delegate {Clipboard.SetText(folder.Text);status.Text="目录已复制。在浏览器的文件夹选择窗口按 Ctrl+V，然后确认。";};Controls.Add(copy);
-        manage.Text="打开扩展管理页";manage.SetBounds(215,277,205,36);manage.Enabled=false;manage.Click+=delegate {Setup.Launch(installed.browserPath,(installed.browser=="edge"?"edge":"chrome")+"://extensions");};Controls.Add(manage);
-        workbench.Text="加载完成后打开工作台";workbench.SetBounds(435,277,210,36);workbench.Enabled=false;workbench.Click+=delegate {Setup.Launch(installed.browserPath,installed.dashboardUrl);};Controls.Add(workbench);
-        AddLabel("首次只需在打开的浏览器里：\r\n① 开启开发人员模式  ② 点击加载解压缩的扩展  ③ 选择上方目录",30,339,615,65);
-        status.SetBounds(30,420,615,55);status.Text="无需账号、密钥或服务器。通知与附件由浏览器保存在本机。";status.ForeColor=Color.FromArgb(87,112,84);Controls.Add(status);
-        AddLabel("已有旧版数据？请先导出完整备份，再在新工作台恢复。",30,481,615,25);
+        AddLabel("安装位置（可直接修改，也可点击浏览选择）",30,230,615,24);
+        folder.SetBounds(30,258,500,28);folder.ReadOnly=false;folder.Text=initialRoot??Setup.DefaultRoot;Controls.Add(folder);
+        browse.Text="浏览…";browse.SetBounds(545,254,100,35);browse.Click+=BrowseClick;Controls.Add(browse);
+        loadPath.SetBounds(30,299,615,46);loadPath.ForeColor=Color.FromArgb(87,112,84);Controls.Add(loadPath);
+        folder.TextChanged+=delegate {UpdateLoadPath();if(!preparing&&!applyingResult){installed=null;copy.Enabled=manage.Enabled=workbench.Enabled=false;install.Enabled=true;install.Text="准备安装并打开浏览器";}};UpdateLoadPath();
+        copy.Text="复制扩展加载目录";copy.SetBounds(30,353,170,36);copy.Enabled=false;copy.Click+=delegate {Clipboard.SetText(installed.folder);status.Text="目录已复制。在浏览器的文件夹选择窗口按 Ctrl+V，然后确认。";};Controls.Add(copy);
+        manage.Text="打开扩展管理页";manage.SetBounds(215,353,205,36);manage.Enabled=false;manage.Click+=delegate {Setup.Launch(installed.browserPath,(installed.browser=="edge"?"edge":"chrome")+"://extensions");};Controls.Add(manage);
+        workbench.Text="加载完成后打开工作台";workbench.SetBounds(435,353,210,36);workbench.Enabled=false;workbench.Click+=delegate {Setup.Launch(installed.browserPath,installed.dashboardUrl);};Controls.Add(workbench);
+        AddLabel("首次只需在打开的浏览器里：\r\n① 开启开发人员模式  ② 点击加载解压缩的扩展  ③ 选择扩展加载目录",30,410,615,54);
+        status.SetBounds(30,477,615,44);status.Text="无需账号、密钥或服务器。通知与附件由浏览器保存在本机。";status.ForeColor=Color.FromArgb(87,112,84);Controls.Add(status);
+        AddLabel("更换安装位置会改变本地扩展 ID。已有数据请先导出备份，再在新工作台恢复。",30,541,615,44);
         FormClosing+=delegate(object sender,FormClosingEventArgs e){if(preparing){e.Cancel=true;status.Text="正在校验和放置文件，请稍候完成后再关闭。";}};
     }
+    void UpdateLoadPath(){try{loadPath.Text="扩展加载目录："+Path.Combine(folder.Text.Trim(),"Extension");}catch{loadPath.Text="请填写有效的安装位置。";}}
+    void BrowseClick(object sender,EventArgs e) {
+        try {using(var dialog=new FolderBrowserDialog()) {
+            dialog.Description="选择安装位置，可新建空文件夹；选择磁盘或已有其他文件的目录时，将自动使用其 Xiaoshijian 子目录。";dialog.ShowNewFolderButton=true;
+            if(Directory.Exists(folder.Text))dialog.SelectedPath=folder.Text;
+            if(dialog.ShowDialog(this)!=DialogResult.OK)return;
+            string selected=dialog.SelectedPath;
+            if(String.Equals(selected.TrimEnd(Path.DirectorySeparatorChar),Path.GetPathRoot(selected).TrimEnd(Path.DirectorySeparatorChar),StringComparison.OrdinalIgnoreCase)||(Directory.EnumerateFileSystemEntries(selected).Any()&&!File.Exists(Path.Combine(selected,"install-receipt.json"))))selected=Path.Combine(selected,"Xiaoshijian");
+            folder.Text=selected;
+        }}catch(Exception error){status.Text="无法选择此目录："+error.Message;}
+    }
+    internal void ChooseBrowser(string kind){browser.SelectedIndex=kind=="chrome"?1:0;}
+    internal void StartPreparation(){install.PerformClick();}
     void AddLabel(string text,int x,int y,int width,int height){var label=new Label {Text=text};label.SetBounds(x,y,width,height);Controls.Add(label);}
     async void InstallClick(object sender,EventArgs e) {
-        preparing=true;install.Enabled=false;browser.Enabled=false;string kind=browser.SelectedIndex==0?"edge":"chrome";
+        preparing=true;install.Enabled=browser.Enabled=folder.Enabled=browse.Enabled=false;string kind=browser.SelectedIndex==0?"edge":"chrome";string selectedRoot=folder.Text.Trim();
         try {
-            installed=await System.Threading.Tasks.Task.Run(()=>Setup.Install(Setup.DefaultRoot,Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),kind,s=>BeginInvoke(new Action(()=>status.Text=s))));
-            folder.Text=installed.folder;copy.Enabled=manage.Enabled=workbench.Enabled=true;install.Text="文件已准备好";
-            try{Clipboard.SetText(installed.folder);status.Text=installed.warning??"目录已复制。浏览器确认加载后会自动进入工作台。";}catch{status.Text="文件已准备好，可点击复制目录继续。";}
-            Setup.Launch(installed.browserPath,(kind=="edge"?"edge":"chrome")+"://extensions");
-        }catch(Exception error){status.Text=error.Message;install.Enabled=true;browser.Enabled=true;MessageBox.Show(this,error.Message,"安装未完成，原有数据保留",MessageBoxButtons.OK,MessageBoxIcon.Warning);}finally{preparing=false;}
+            installed=await System.Threading.Tasks.Task.Run(()=>Setup.Install(selectedRoot,shortcutsOverride??Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),kind,s=>BeginInvoke(new Action(()=>status.Text=s))));
+            applyingResult=true;folder.Text=Path.GetDirectoryName(installed.folder);applyingResult=false;copy.Enabled=manage.Enabled=workbench.Enabled=true;install.Text="文件已准备好";
+            if(!noOpen){try{Clipboard.SetText(installed.folder);status.Text=installed.warning??"目录已复制。浏览器确认加载后会自动进入工作台。";}catch{status.Text="文件已准备好，可点击复制目录继续。";}Setup.Launch(installed.browserPath,(kind=="edge"?"edge":"chrome")+"://extensions");}
+            if(Completed!=null)Completed(installed);
+        }catch(Exception error){status.Text=error.Message;install.Enabled=true;if(Completed!=null)Completed(new InstallResult{success=false,error=error.Message});else MessageBox.Show(this,error.Message,"安装未完成，原有数据保留",MessageBoxButtons.OK,MessageBoxIcon.Warning);}finally{preparing=false;browser.Enabled=folder.Enabled=browse.Enabled=true;}
     }
 }
