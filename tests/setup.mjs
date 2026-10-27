@@ -18,7 +18,7 @@ async function wait(fn){for(let i=0;i<100;i++){const value=await fn();if(value)r
 try {
   await run(executable,['--preview',path.join(out,'setup-preview.png')],{windowsHide:true,timeout:30000});results.push('实际 EXE 渲染安装助手界面');
   context=await launchSetupBrowser(profile);const automaticPageEvent=context.waitForEvent('page',{timeout:60000});
-  const installed=await prepare(true);const automaticPage=await automaticPageEvent;await automaticPage.waitForURL(/^(about:blank|edge:\/\/extensions\/?)$/);await automaticPage.close();assert.equal(installed.folder,path.join(root,'Extension'));assert(installed.success);assert(installed.manualConfirmationRequired);assert(installed.shortcutCreated);assert.equal(installed.version,version);
+  const installed=await prepare(true);const automaticPage=await automaticPageEvent;await automaticPage.waitForURL(/^(about:blank|(edge|chrome):\/\/extensions\/?)$/);await automaticPage.close();assert.equal(installed.folder,path.join(root,'Extension'));assert(installed.success);assert(installed.manualConfirmationRequired);assert(installed.shortcutCreated);assert.equal(installed.version,version);
   const archive=unzipSync(new Uint8Array(await readFile(`release/xiaoshijian-${version}-edge.zip`)));
   for(const [name,bytes] of Object.entries(archive))assert(Buffer.from(bytes).equals(await readFile(path.join(installed.folder,name))));
   results.push('真实 WinForms 输入框和安装按钮使用自选中文/空格目录，逐文件与 ZIP 字节核对');
@@ -33,7 +33,7 @@ try {
   // The helper pastes the management URL into the new window's address bar; if paste automation is
   // unavailable it keeps the clipboard guidance. Either way the page must reach the real manage page.
   if(!button.automated){assert.match(button.status,/Ctrl\+V/);await managementPage.goto(button.clipboardAddress);}
-  await managementPage.waitForURL(/edge:\/\/extensions/);
+  await managementPage.waitForURL(/(edge|chrome):\/\/extensions/);
   await managementPage.getByText(/^(开发人员模式|开发者模式|Developer mode)$/).filter({visible:true}).first().waitFor({timeout:20000}).catch(async()=>{await managementPage.locator('#dev-switch, extensions-manager').first().waitFor({state:'visible',timeout:20000});});await managementPage.screenshot({path:path.join(out,'management-page.png')});await managementPage.close();
   results.push(`实际点击 WinForms 管理入口，浏览器新窗口${button.automated?'由助手自动粘贴地址并进入':'按剪贴板指引导航进入'}真实扩展管理页`);
   const runtime=await loadExtension(context,installed.folder);assert.equal(runtime.id,installed.extensionId);

@@ -196,19 +196,26 @@ internal static class BrowserAutomation {
         },IntPtr.Zero);
         return windows;
     }
+    internal static string LastNavigateDiagnostic;
     internal static bool NavigatePastedWindow(IEnumerable<IntPtr> before,string url,int timeoutMs) {
-        if(String.IsNullOrEmpty(url))return false;
+        if(String.IsNullOrEmpty(url)){LastNavigateDiagnostic="empty-url";return false;}
         var known=new HashSet<IntPtr>(before);IntPtr target=IntPtr.Zero;int deadline=Environment.TickCount+timeoutMs;
         while(target==IntPtr.Zero&&Environment.TickCount<deadline) {
             foreach(IntPtr handle in BrowserWindows())if(known.Add(handle)){target=handle;break;}
             if(target==IntPtr.Zero)System.Threading.Thread.Sleep(250);
         }
-        return target!=IntPtr.Zero&&TypeUrl(target,url);
+        if(target==IntPtr.Zero){LastNavigateDiagnostic="window-not-found";return false;}
+        bool sent=TypeUrl(target,url);
+        LastNavigateDiagnostic=sent?"keys-sent":"foreground-failed";
+        return sent;
     }
     internal static bool TypeUrl(IntPtr handle,string url) {
         for(var attempt=0;attempt<6;attempt++) {
             if(!IsWindow(handle)||!IsWindowVisible(handle))return false;
-            Foreground(handle);System.Threading.Thread.Sleep(attempt==0?600:300);
+            if(attempt>=2)ShowWindow(handle,6);   // minimize...
+            Foreground(handle);
+            if(attempt>=2)ShowWindow(handle,9);   // ...then restore, which forces activation
+            System.Threading.Thread.Sleep(attempt==0?600:350);
             if(GetForegroundWindow()!=handle)continue;
             Combo(true,0x4C);System.Threading.Thread.Sleep(200);   // Ctrl+L focuses the address bar
             if(GetForegroundWindow()!=handle)return false;
@@ -277,7 +284,7 @@ internal class SetupWindow:Form {
     }
     void UpdateManagementAddress(){managementAddress.Text=(browser.SelectedIndex==0?"edge":"chrome")+"://extensions/";}
     void OpenManagement() {
-        managementOpened=false;lastAutomated=false;bool copied=false;
+        managementOpened=false;lastAutomated=false;BrowserAutomation.LastNavigateDiagnostic=null;bool copied=false;
         try{Clipboard.SetText(managementAddress.Text);copied=true;}catch{}
         List<IntPtr> before=BrowserAutomation.BrowserWindows();
         try {
@@ -295,7 +302,7 @@ internal class SetupWindow:Form {
     }
     internal bool TestManagementButton(string report) {
         manage.PerformClick();
-        File.WriteAllText(report,Setup.Json.Serialize(new {success=managementOpened,automated=lastAutomated,clipboardAddress=Clipboard.GetText(),managementAddress=managementAddress.Text,status=status.Text,buttonText=manage.Text,copyDirectoryEnabled=copy.Enabled}),new UTF8Encoding(false));return managementOpened;
+        File.WriteAllText(report,Setup.Json.Serialize(new {success=managementOpened,automated=lastAutomated,navigateDiagnostic=BrowserAutomation.LastNavigateDiagnostic,clipboardAddress=Clipboard.GetText(),managementAddress=managementAddress.Text,status=status.Text,buttonText=manage.Text,copyDirectoryEnabled=copy.Enabled}),new UTF8Encoding(false));return managementOpened;
     }
     void UpdateLoadPath(){try{loadPath.Text="扩展加载目录："+Path.Combine(folder.Text.Trim(),"Extension");}catch{loadPath.Text="请填写有效的安装位置。";}}
     void BrowseClick(object sender,EventArgs e) {
