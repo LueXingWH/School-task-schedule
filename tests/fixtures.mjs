@@ -1,0 +1,17 @@
+import {mkdir,writeFile} from 'node:fs/promises';
+import {createCanvas,GlobalFonts} from '@napi-rs/canvas';
+import {Document,Packer,Paragraph,Table,TableRow,TableCell} from 'docx';
+import {PDFDocument} from 'pdf-lib';
+import {chromium} from 'playwright';
+const dir='tests/fixtures';await mkdir(dir,{recursive:true});
+GlobalFonts.loadFontsFromDir('C:/Windows/Fonts');
+const c=createCanvas(1500,700),x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.fillStyle='#111';x.font='bold 52px "Microsoft YaHei"';x.fillText('校园创新作品征集通知',70,100);x.font='42px "Microsoft YaHei"';
+for(const [i,line] of ['2026年11月9日 18:00 报名截止','提交材料：报名表、汇总表、作品介绍PPT','可提交演示视频。请核对日期与材料。','Student Innovation 2026 · Room 301'].entries())x.fillText(line,70,210+i*110);
+const image=c.toBuffer('image/png');await writeFile(`${dir}/notice-zh.png`,image);
+const scan=await PDFDocument.create();const pic=await scan.embedPng(image);scan.addPage([750,350]).drawImage(pic,{x:0,y:0,width:750,height:350});await writeFile(`${dir}/scanned.pdf`,await scan.save());
+const para=t=>new Paragraph(t);const cell=t=>new TableCell({children:[para(t)]});
+const doc=new Document({sections:[{children:[para('校园创新项目申报通知'),para('2026年11月9日报名截止。'),para('提交材料：'),new Table({rows:[new TableRow({children:[cell('材料名称'),cell('要求')]}),new TableRow({children:[cell('报名表'),cell('必交')]}),new TableRow({children:[cell('作品介绍PPT'),cell('必交')]}),new TableRow({children:[cell('演示视频'),cell('可选') ]})]}),para('联系人：学生事务中心')]}]});await writeFile(`${dir}/notice-table.docx`,await Packer.toBuffer(doc));
+const browser=await chromium.launch({channel:'chrome',headless:true});const page=await browser.newPage();await page.setContent('<html lang="zh"><style>body{font:20px "Microsoft YaHei"}.page{page-break-after:always}</style><body><div class="page"><h1>校园活动报名通知</h1><p>2026年11月9日 18:00 提交截止。</p><p>提交材料：报名表、作品介绍PPT。</p></div><div><h1>第二页：补充说明</h1><p>2026年11月12日评选。</p><p>可提交演示视频。</p><p>English table: Name | Requirement</p></div></body></html>');await page.pdf({path:`${dir}/text-multipage.pdf`,format:'A4',printBackground:true});await browser.close();
+const {readFile}=await import('node:fs/promises');const mixed=await PDFDocument.load(await readFile(`${dir}/text-multipage.pdf`));const scanPage=(await mixed.copyPages(scan,[0]))[0];mixed.addPage(scanPage);await writeFile(`${dir}/mixed.pdf`,await mixed.save());
+await writeFile(`${dir}/broken.pdf`,'This is not a PDF');await writeFile(`${dir}/broken.docx`,'This is not a DOCX');await writeFile(`${dir}/old.doc`,'Legacy Word boundary fixture');
+await writeFile(`${dir}/README.md`,'这些是由 tests/fixtures.mjs 生成的非敏感回归测试文件。图片通过真实 OCR 识别，PDF/DOCX 通过实际解析器读取；预期文本仅用于断言，不作为解析器返回值。\n');console.log('Real Chinese/English image, scanned PDF, 2-page text PDF, table DOCX and invalid fixtures created.');

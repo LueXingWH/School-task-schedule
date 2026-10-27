@@ -1,0 +1,50 @@
+# Third-party runtime notices
+
+OCR language data: tesseract-ocr/tessdata_fast, Apache-2.0, pinned commit 87416418657359cb625c412a48b6e1d6d41c29bd. License: licenses/tessdata_fast.txt
+
+- dexie@4.4.7: Apache-2.0. licenses/dexie.txt
+- fflate@0.8.3: MIT. licenses/fflate.txt
+- mammoth@1.13.0: BSD-2-Clause. licenses/mammoth.txt
+- @xmldom/xmldom@0.8.15: MIT. licenses/@xmldom_xmldom.txt
+- argparse@1.0.10: MIT. licenses/argparse.txt
+- sprintf-js@1.0.3: BSD-3-Clause. licenses/sprintf-js.txt
+- base64-js@1.5.1: MIT. licenses/base64-js.txt
+- dingbat-to-unicode@1.0.2: BSD-2-Clause. licenses/dingbat-to-unicode.txt
+- jszip@3.10.2: (MIT OR GPL-3.0-or-later). licenses/jszip.txt
+- lie@3.3.0: MIT. licenses/lie.txt
+- immediate@3.0.6: MIT. licenses/immediate.txt
+- pako@1.0.11: (MIT AND Zlib). licenses/pako.txt
+- readable-stream@2.3.8: MIT. licenses/readable-stream.txt
+- core-util-is@1.0.3: MIT. licenses/core-util-is.txt
+- inherits@2.0.4: ISC. licenses/inherits.txt
+- isarray@1.0.0: MIT. License declaration in npm package metadata.
+- process-nextick-args@2.0.1: MIT. licenses/process-nextick-args.txt
+- safe-buffer@5.1.2: MIT. licenses/safe-buffer.txt
+- string_decoder@1.1.1: MIT. licenses/string_decoder.txt
+- util-deprecate@1.0.2: MIT. licenses/util-deprecate.txt
+- setimmediate@1.0.5: MIT. licenses/setimmediate.txt
+- lop@0.4.2: BSD-2-Clause. licenses/lop.txt
+- duck@0.1.12: BSD. licenses/duck.txt
+- underscore@1.13.8: MIT. licenses/underscore.txt
+- option@0.2.4: BSD-2-Clause. licenses/option.txt
+- xmlbuilder@10.1.1: MIT. licenses/xmlbuilder.txt
+- pdfjs-dist@6.4.299: Apache-2.0. licenses/pdfjs-dist.txt
+- @napi-rs/canvas@1.0.13: MIT. licenses/@napi-rs_canvas.txt
+- @napi-rs/canvas-win32-x64-msvc@1.0.13: MIT. License declaration in npm package metadata.
+- react-dom@19.3.1: MIT. licenses/react-dom.txt
+- react@19.3.1: MIT. licenses/react.txt
+- scheduler@0.28.0: MIT. licenses/scheduler.txt
+- tesseract.js@7.0.0: Apache-2.0. licenses/tesseract.js.txt
+- bmp-js@0.1.0: MIT. licenses/bmp-js.txt
+- idb-keyval@6.3.0: Apache-2.0. licenses/idb-keyval.txt
+- is-url@1.2.4: MIT. licenses/is-url.txt
+- node-fetch@2.7.0: MIT. licenses/node-fetch.txt
+- whatwg-url@5.0.0: MIT. licenses/whatwg-url.txt
+- tr46@0.0.3: MIT. License declaration in npm package metadata.
+- webidl-conversions@3.0.1: BSD-2-Clause. licenses/webidl-conversions.txt
+- opencollective-postinstall@2.0.3: MIT. licenses/opencollective-postinstall.txt
+- regenerator-runtime@0.13.11: MIT. licenses/regenerator-runtime.txt
+- tesseract.js-core@7.0.0: Apache-2.0. licenses/tesseract.js-core.txt
+- wasm-feature-detect@1.9.0: Apache-2.0. licenses/wasm-feature-detect.txt
+- zlibjs@0.3.1: MIT. licenses/zlibjs.txt
+- zod@4.6.7: MIT. licenses/zod.txt

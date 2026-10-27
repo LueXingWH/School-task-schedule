@@ -1,0 +1,41 @@
+{
+  "name": "xiaoshijian",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "assets": "node scripts/assets.mjs",
+    "build": "npm run assets && tsc --noEmit && vite build && node scripts/package.mjs",
+    "test": "vitest run",
+    "test:e2e": "node tests/browser.mjs",
+    "fixtures": "node tests/fixtures.mjs",
+    "test:install": "node tests/install.mjs",
+    "test:public": "node tests/public-web.mjs",
+    "test:clean": "node scripts/clean-check.mjs",
+    "deliver": "node scripts/deliver.mjs"
+  },
+  "dependencies": {
+    "dexie": "4.4.7",
+    "fflate": "0.8.3",
+    "mammoth": "1.13.0",
+    "pdfjs-dist": "6.4.299",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "tesseract.js": "7.0.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "1.0.13",
+    "@types/chrome": "0.3.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "docx": "9.14.0",
+    "pdf-lib": "1.17.1",
+    "playwright": "1.64.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  }
+}
