@@ -10,6 +10,8 @@ const setupBytes=await readFile(`release/xiaoshijian-${version}-setup.exe`);
 if(setup.status!=='PASS'||setup.version!==version||setup.executableSHA256!==createHash('sha256').update(setupBytes).digest('hex'))throw Error('The actual Windows installer must pass its current-binary acceptance tests');
 // Require fresh results from both installed browsers before producing a delivery.
 for(const browser of ['chrome','edge']) {
+  const native=JSON.parse(await readFile(`test-results/setup-results-${browser}.json`,'utf8'));
+  if(native.status!=='PASS'||native.version!==version||!native.managementButtonVerified||native.executableSHA256!==setup.executableSHA256)throw Error(`Missing current-binary ${browser} management-button acceptance`);
   const core=JSON.parse(await readFile(`test-results/${browser}/browser-results.json`,'utf8'));
   const install=JSON.parse(await readFile(`test-results/${browser}/install-results.json`,'utf8'));
   if(core.extensionVersion!==version||install.extensionVersion!==version||core.results.filter(r=>r.status==='PASS').length<15||core.results.some(r=>r.status==='FAIL')||core.errors.length||core.offlineHTTPRequests.length||install.results.some(r=>r.startsWith('FAIL'))||install.results.length<(browser==='edge'?6:5))throw Error(`Missing or failing ${browser} ${version} acceptance results`);
@@ -26,6 +28,11 @@ for(const name of ['extension/manifest.json','extension/vendor/ocr/worker.min.js
 for(const browser of ['chrome','edge'])for(const name of ['browser-results.json','install-results.json','public-web.json','ocr-actual.txt','pdf-text-actual.txt','pdf-scan-actual.txt','docx-actual.txt','dashboard.png','mobile.png','ocr-result.png','fresh-install-restored.png','public-web.png'])try{full[`evidence/${browser}/${name}`]=new Uint8Array(await readFile(`test-results/${browser}/${name}`));}catch{}
 for(const name of ['clean-build.json','unit-results.json','setup-results.json'])try{full[`evidence/${name}`]=new Uint8Array(await readFile(`test-results/${name}`));}catch{}
 if(setup.preview)full['evidence/setup-preview.png']=new Uint8Array(await readFile(setup.preview));
+for(const browser of ['chrome','edge']) {
+  const native=JSON.parse(await readFile(`test-results/setup-results-${browser}.json`,'utf8'));
+  full[`evidence/${browser}/setup-results.json`]=new Uint8Array(await readFile(`test-results/setup-results-${browser}.json`));
+  full[`evidence/${browser}/management-page.png`]=new Uint8Array(await readFile(native.managementPage));
+}
 await writeFile(`release/xiaoshijian-${version}-delivery.zip`,zipSync(full,{level:6}));
 const sums=[];for(const kind of ['edge','chrome','source','delivery','setup']){const name=`xiaoshijian-${version}-${kind}.${kind==='setup'?'exe':'zip'}`;const bytes=await readFile('release/'+name);sums.push(`${createHash('sha256').update(bytes).digest('hex')}  ${name}`);console.log(`${name}: ${(bytes.length/1024**2).toFixed(2)} MiB`);}
 await writeFile('release/SHA256SUMS.txt',sums.join('\n')+'\n');

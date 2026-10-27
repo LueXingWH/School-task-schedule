@@ -6,23 +6,34 @@ import assert from 'node:assert/strict';
 import {unzipSync} from 'fflate';
 import {createHash} from 'node:crypto';
 process.env.TEST_BROWSER=process.env.TEST_BROWSER||'msedge';
-const {launchBrowser,loadExtension}=await import('./browser-support.mjs');
+const {launchBrowser,loadExtension,browserSlug}=await import('./browser-support.mjs');
 const run=promisify(execFile),{version}=JSON.parse(await readFile('package.json','utf8'));
 const out=path.resolve('test-results/setup-'+Date.now()),root=path.join(out,'中文 用户 路径','我选择的安装目录'),desktop=path.join(out,'测试桌面');await mkdir(out,{recursive:true});
+const profile=path.resolve(`.test-profile-setup-${Date.now()}`);
 const executable=path.resolve(`release/xiaoshijian-${version}-setup.exe`),results=[];
 let context;
 const launchSetupBrowser=profile=>launchBrowser(profile,{headless:false,args:['--enable-unsafe-extension-debugging','--window-position=-20000,-20000']});
-async function prepare(useUI=false,target=root){const report=path.join(out,'native-result.json');await run(executable,[useUI?'--ui-install-only':'--install-only','--root',target,'--shortcuts-dir',desktop,'--browser',process.env.TEST_BROWSER==='chrome'?'chrome':'edge','--result',report],{windowsHide:true,timeout:60000});return JSON.parse(await readFile(report,'utf8'));}
+async function prepare(useUI=false,target=root){const report=path.join(out,'native-result.json');await run(executable,[useUI?'--ui-install-only':'--install-only','--root',target,'--shortcuts-dir',desktop,'--browser',process.env.TEST_BROWSER==='chrome'?'chrome':'edge','--result',report,...(useUI?['--test-open-browser','--browser-profile',profile]:[])],{windowsHide:true,timeout:60000});return JSON.parse(await readFile(report,'utf8'));}
 async function wait(fn){for(let i=0;i<100;i++){const value=await fn();if(value)return value;await new Promise(r=>setTimeout(r,150));}throw Error('Setup browser validation timed out');}
 try {
   await run(executable,['--preview',path.join(out,'setup-preview.png')],{windowsHide:true,timeout:30000});results.push('实际 EXE 渲染安装助手界面');
-  const installed=await prepare(true);assert.equal(installed.folder,path.join(root,'Extension'));assert(installed.success);assert(installed.manualConfirmationRequired);assert(installed.shortcutCreated);assert.equal(installed.version,version);
+  context=await launchSetupBrowser(profile);const automaticPageEvent=context.waitForEvent('page',{timeout:60000});
+  const installed=await prepare(true);const automaticPage=await automaticPageEvent;await automaticPage.waitForURL('about:blank');await automaticPage.close();assert.equal(installed.folder,path.join(root,'Extension'));assert(installed.success);assert(installed.manualConfirmationRequired);assert(installed.shortcutCreated);assert.equal(installed.version,version);
   const archive=unzipSync(new Uint8Array(await readFile(`release/xiaoshijian-${version}-edge.zip`)));
   for(const [name,bytes] of Object.entries(archive))assert(Buffer.from(bytes).equals(await readFile(path.join(installed.folder,name))));
   results.push('真实 WinForms 输入框和安装按钮使用自选中文/空格目录，逐文件与 ZIP 字节核对');
   const shortcut=JSON.parse((await run('powershell.exe',['-NoProfile','-NonInteractive','-File',path.resolve('tests/inspect-shortcut.ps1'),'-Path',path.join(desktop,'校事笺.lnk')],{windowsHide:true,encoding:'utf8'})).stdout.replace(/^\uFEFF/,''));
   assert.equal(shortcut.target.toLowerCase(),installed.browserPath.toLowerCase());assert.equal(shortcut.arguments,`"${installed.dashboardUrl}"`);results.push('真实 Windows 桌面快捷方式目标和工作台参数正确');
-  const profile=path.resolve(`.test-profile-setup-${Date.now()}`);context=await launchSetupBrowser(profile);const runtime=await loadExtension(context,installed.folder);assert.equal(runtime.id,installed.extensionId);
+  const buttonReport=path.join(out,'management-button.json');
+  const managementPageEvent=context.waitForEvent('page',{timeout:15000});
+  await run(executable,['--ui-manage-test','--browser-profile',profile,'--browser',process.env.TEST_BROWSER==='chrome'?'chrome':'edge','--result',buttonReport],{windowsHide:true,timeout:15000});
+  const managementPage=await managementPageEvent;await managementPage.waitForURL('about:blank');
+  const button=JSON.parse(await readFile(buttonReport,'utf8')),managementURL=(browserSlug==='edge'?'edge':'chrome')+'://extensions/';
+  assert(button.success);assert.equal(button.managementAddress,managementURL);assert.equal(button.clipboardAddress,managementURL);assert.equal(button.buttonText,'打开浏览器并复制地址');assert.match(button.status,/Ctrl\+L、Ctrl\+V、回车/);assert.equal(button.copyDirectoryEnabled,false);
+  // The helper deliberately guides manual navigation. Verify the real destination, without claiming automatic WebUI navigation.
+  await managementPage.goto(button.clipboardAddress);await managementPage.getByText(/^(开发人员模式|开发者模式|Developer mode)$/).first().waitFor();await managementPage.screenshot({path:path.join(out,'management-page.png')});await managementPage.close();
+  results.push('准备前实际点击 WinForms 管理入口，打开真实浏览器空白页、读取系统剪贴板并核对提示；按指引导航真实扩展管理页');
+  const runtime=await loadExtension(context,installed.folder);assert.equal(runtime.id,installed.extensionId);
   let welcome=await wait(async()=>context.pages().find(p=>p.url()===runtime.base+'/dashboard.html#welcome'));await welcome.getByRole('heading',{name:'安装完成，可以开始收录了'}).waitFor();
   assert.deepEqual((await welcome.evaluate(()=>chrome.storage.local.get('settings'))).settings,{upcomingDays:7,sort:'deadline',compact:false});results.push('实际加载准备目录，扩展 ID 与快捷方式一致，首次自动打开欢迎页并配置默认设置');
   await welcome.close();const [launched,created]=await Promise.allSettled([run(installed.browserPath,[`--user-data-dir=${profile}`,installed.dashboardUrl],{windowsHide:true,timeout:15000}),context.waitForEvent('page',{timeout:15000})]);if(launched.status==='rejected')assert.equal(launched.reason.code,21);if(created.status==='rejected')throw created.reason;const page=created.value;await page.waitForURL(installed.dashboardUrl);await page.getByRole('heading',{name:'今天，从容一点'}).waitFor();results.push('使用快捷方式对应浏览器和参数，在真实浏览器直接打开工作台');
@@ -35,5 +46,5 @@ try {
   const occupied=path.join(out,'已有文件的目录');await mkdir(occupied);await writeFile(path.join(occupied,'重要文件.txt'),'不得覆盖');
   for(const bad of [path.parse(root).root,'relative-folder',occupied]){const report=path.join(out,'rejected.json');let rejected=false;try{await run(executable,['--install-only','--root',bad,'--shortcuts-dir',desktop,'--result',report],{windowsHide:true});}catch{rejected=true;}assert(rejected);assert.equal(JSON.parse(await readFile(report,'utf8')).success,false);}
   assert.equal(await readFile(path.join(occupied,'重要文件.txt'),'utf8'),'不得覆盖');results.push('拒绝磁盘根目录、相对路径和非空未管理目录，原有文件不改动');
-  const hash=createHash('sha256').update(await readFile(executable)).digest('hex');await writeFile('test-results/setup-results.json',JSON.stringify({status:'PASS',version,browser:runtime.browser,browserVersion:runtime.browserVersion,executableSHA256:hash,manualConfirmationRequired:true,results,preview:path.join(out,'setup-preview.png')},null,2));console.log(results.join('\n'));
+  const hash=createHash('sha256').update(await readFile(executable)).digest('hex');const report=JSON.stringify({status:'PASS',version,browser:runtime.browser,browserVersion:runtime.browserVersion,executableSHA256:hash,manualConfirmationRequired:true,managementButtonVerified:true,managementPage:path.join(out,'management-page.png'),results,preview:path.join(out,'setup-preview.png')},null,2);await writeFile('test-results/setup-results.json',report);await writeFile(`test-results/setup-results-${browserSlug}.json`,report);console.log(results.join('\n'));
 }catch(e){process.exitCode=1;console.error(e);await writeFile('test-results/setup-results.json',JSON.stringify({status:'FAIL',version,results,error:String(e)},null,2));}finally{await context?.close();}

@@ -4,7 +4,7 @@
 
 ## 已准备的包与描述
 
-上传包：`release/xiaoshijian-1.2.1-edge.zip`，根目录含真实 MV3 manifest 与全部本地 OCR/PDF/DOCX 资源。安装助手 EXE 不上传扩展商店。
+上传包：`release/xiaoshijian-1.2.2-edge.zip`，根目录含真实 MV3 manifest 与全部本地 OCR/PDF/DOCX 资源。安装助手 EXE 不上传扩展商店。
 
 名称：校事笺
 

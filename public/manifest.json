@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "校事笺",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "把校园通知、截图和附件收进本地工作台，核对截止日、安排任务、准备材料。",
   "minimum_chrome_version": "154",
   "permissions": [
