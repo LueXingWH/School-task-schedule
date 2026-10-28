@@ -5,6 +5,7 @@ import {useLive} from '../hooks';
 import {localDay,overallProgress} from '../schedule';
 import {type Settings} from '../model';
 import {DEFAULT_SETTINGS as defaults} from '../settings';
+import {McpPanel} from './McpPanel';
 
 export async function loadSettings():Promise<Settings>{
   if(!globalThis.chrome?.storage)return defaults;
@@ -44,6 +45,7 @@ export function SettingsPanel({settings,onSettings}:{settings:Settings;onSetting
 
   return <div className="settings-grid">
     <div className="settings-col">
+      <McpPanel/>
       <section className="panel">
         <div className="section-heading"><h2>数据与备份</h2><span>本地浏览器数据库</span></div>
         <div className="stat-row">
@@ -107,7 +109,7 @@ export function SettingsPanel({settings,onSettings}:{settings:Settings;onSetting
         <p>Windows Microsoft Edge / Google Chrome（MV3），已验证版本见验收记录。图片支持 PNG/JPEG/WebP；附件支持 PDF 与现代 DOCX。</p>
         <div className="check-line">Chrome 与 Edge 分别保存本地数据；切换浏览器可导出完整备份，再在目标浏览器恢复。</div>
         <div className="check-line">本地 Tesseract OCR 使用预训练中英文识别数据。</div>
-        <div className="check-line">无大语言模型、云 OCR、账号、服务器、遥测或 API 密钥。</div>
+        <div className="check-line">无内置大语言模型、云 OCR、账号、遥测或模型 API 密钥；可选 MCP 仅通过本机桥接提供日程工具。</div>
         <p className="muted">候选日期与材料只是辅助线索，提交前请以原通知为准。</p>
       </section>
     </div>

@@ -5,7 +5,9 @@ export interface Evidence { sourceId: string; page?: number; start: number; end:
 export interface DateCandidate extends Evidence { id: string; raw: string; value?: string; precision: 'day' | 'minute' | 'unknown'; role: 'deadline' | 'other' | 'unknown'; tentative: boolean; valid: boolean; note: string }
 export interface Deadline { value: string; precision: 'day' | 'minute'; confirmed: boolean; candidateId?: string }
 export interface Material { id: string; name: string; requirement: 'required' | 'optional' | 'excluded'; done: boolean; origin: 'machine' | 'manual'; originKey?: string; edited?: boolean; evidence?: Evidence }
-export interface PersonalTask { id: string; text: string; date: string; time?: string; done: boolean }
+export interface AgentSource { client: string; requestId: string; fingerprint: string; notes: string }
+export interface PersonalTask { id: string; text: string; date: string; time?: string; done: boolean; agent?: AgentSource }
+export interface McpReceipt { key: string; fingerprint: string; noticeId: string; taskId: string }
 export interface ActionCandidate { id: string; text: string; time?: string; timeNote: string; optional: boolean; selected: boolean; originKey: string; evidence: Evidence; edited?: boolean; dismissed?: boolean; taskId?: string }
 export interface PageText { page: number; text: string; method: 'text' | 'scan' | 'ocr'; error?: string }
 export interface Source { id: string; kind: 'text' | 'web' | 'image' | 'pdf' | 'docx'; name: string; titleHint?: string; url?: string; text: string; originalText: string; attachmentId?: string; pages?: PageText[]; editedAt?: number; rotation?: number; warnings?: string[] }

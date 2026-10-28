@@ -3,6 +3,7 @@ import {promisify} from 'node:util';
 import {readFile,writeFile,mkdir,readdir} from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import {nativeRegistry} from './mcp-support.mjs';
 import {unzipSync} from 'fflate';
 import {createHash} from 'node:crypto';
 process.env.TEST_BROWSER=process.env.TEST_BROWSER||'msedge';
@@ -11,6 +12,7 @@ const run=promisify(execFile),{version}=JSON.parse(await readFile('package.json'
 const out=path.resolve('test-results/setup-'+Date.now()),root=path.join(out,'中文 用户 路径','我选择的安装目录'),desktop=path.join(out,'测试桌面');await mkdir(out,{recursive:true});
 const profile=path.resolve(`.test-profile-setup-${Date.now()}`);
 const executable=path.resolve(`release/xiaoshijian-${version}-setup.exe`),results=[];
+const nativeSnapshot=path.join(out,'native-registry-before.json');await nativeRegistry('Save',nativeSnapshot);
 let context,browserSession;
 const launchSetupBrowser=async profile=>{browserSession=await launchAttachedBrowser(profile);context=browserSession.context;return context;};
 async function prepare(useUI=false,target=root){const report=path.join(out,'native-result.json');await run(executable,[useUI?'--ui-install-only':'--install-only','--root',target,'--shortcuts-dir',desktop,'--browser',process.env.TEST_BROWSER==='chrome'?'chrome':'edge','--result',report,...(useUI?['--test-open-browser','--browser-profile',profile]:[])],{windowsHide:true,timeout:60000});return JSON.parse(await readFile(report,'utf8'));}
@@ -69,4 +71,4 @@ try {
   for(const bad of [path.parse(root).root,'relative-folder',occupied]){const report=path.join(out,'rejected.json');let rejected=false;try{await run(executable,['--install-only','--root',bad,'--shortcuts-dir',desktop,'--result',report],{windowsHide:true});}catch{rejected=true;}assert(rejected);assert.equal(JSON.parse(await readFile(report,'utf8')).success,false);}
   assert.equal(await readFile(path.join(occupied,'重要文件.txt'),'utf8'),'不得覆盖');results.push('拒绝磁盘根目录、相对路径和非空未管理目录，原有文件不改动');
   const hash=createHash('sha256').update(await readFile(executable)).digest('hex');const report=JSON.stringify({status:'PASS',version,browser:runtime.browser,browserVersion:runtime.browserVersion,executableSHA256:hash,manualConfirmationRequired:true,managementButtonVerified:true,managementPage:path.join(out,'management-page.png'),results,preview:path.join(out,'setup-preview.png')},null,2);await writeFile('test-results/setup-results.json',report);await writeFile(`test-results/setup-results-${browserSlug}.json`,report);console.log(results.join('\n'));
-}catch(e){process.exitCode=1;console.error(e);await writeFile('test-results/setup-results.json',JSON.stringify({status:'FAIL',version,results,error:String(e)},null,2));}finally{await browserSession?.close();await context?.close();}
+}catch(e){process.exitCode=1;console.error(e);await writeFile('test-results/setup-results.json',JSON.stringify({status:'FAIL',version,results,error:String(e)},null,2));}finally{await browserSession?.close();await context?.close();await nativeRegistry('Restore',nativeSnapshot);}

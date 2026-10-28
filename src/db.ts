@@ -1,8 +1,9 @@
 import Dexie, { type EntityTable } from 'dexie';
-import { id, normalize, safeURL, type Notice, type Source, type Attachment, type ParseJob } from './model';
+import { id, normalize, safeURL, type Notice, type Source, type Attachment, type ParseJob, type McpReceipt } from './model';
 import { derive } from './rules';
-export const db = new Dexie('xiaoshijian') as Dexie & { notices:EntityTable<Notice,'id'>; attachments:EntityTable<Attachment,'id'>; jobs:EntityTable<ParseJob,'id'> };
+export const db = new Dexie('xiaoshijian') as Dexie & { notices:EntityTable<Notice,'id'>; attachments:EntityTable<Attachment,'id'>; jobs:EntityTable<ParseJob,'id'>; mcpRequests:EntityTable<McpReceipt,'key'> };
 db.version(1).stores({notices:'id,life,createdAt,updatedAt',attachments:'id,noticeId,sourceId',jobs:'id,noticeId,sourceId,state'});
+db.version(2).stores({mcpRequests:'key,noticeId'});
 export async function change(id:string,fn:(n:Notice)=>Notice|void) {
   await db.transaction('rw',db.notices,async()=>{const n=await db.notices.get(id);if(!n)return;const changed=fn(n)||n;await db.notices.put({...changed,updatedAt:Date.now()});});
 }
@@ -24,4 +25,4 @@ export async function rederive(noticeId:string) { await change(noticeId,n=>deriv
 export async function deleteNotice(noticeId:string) {
   await db.transaction('rw',db.notices,db.attachments,db.jobs,async()=>{await db.notices.delete(noticeId);await db.attachments.where('noticeId').equals(noticeId).delete();await db.jobs.where('noticeId').equals(noticeId).delete();});
 }
-export async function clearData() {await db.transaction('rw',db.notices,db.attachments,db.jobs,async()=>{await db.notices.clear();await db.attachments.clear();await db.jobs.clear();});}
+export async function clearData() {await db.transaction('rw',db.notices,db.attachments,db.jobs,db.mcpRequests,async()=>{await db.notices.clear();await db.attachments.clear();await db.jobs.clear();await db.mcpRequests.clear();});}

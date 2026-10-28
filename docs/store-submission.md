@@ -4,7 +4,7 @@
 
 ## 已准备的包与描述
 
-上传包：`release/xiaoshijian-1.4.0-edge.zip`，根目录含真实 MV3 manifest 与全部本地 OCR/PDF/DOCX 资源。安装助手 EXE 不上传扩展商店。
+上传包：`release/xiaoshijian-1.5.0-edge.zip`，根目录含真实 MV3 manifest 与全部本地 OCR/PDF/DOCX 资源。安装助手 EXE 不上传扩展商店。
 
 名称：校事笺
 
@@ -23,6 +23,7 @@
 - `activeTab`：仅在用户主动点击工具栏后临时访问当前网页。
 - `scripting`：执行可见正文/选区采集，排除表单等内容。
 - `storage`：保存少量显示/排序设置；通知、原文与附件保存在扩展自己的 IndexedDB。
+- `nativeMessaging`：仅用于用户启用的本地 MCP 日程桥接，连接随安装包提供的原生宿主；未启用时不连接。
 - 本地 Worker、WASM、语言数据随包提供；`wasm-unsafe-eval` 仅用于本地 WASM。没有远程脚本、云 OCR 或运行时 CDN 下载。
 
 ## 隐私与审核测试说明

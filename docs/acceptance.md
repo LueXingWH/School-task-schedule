@@ -1,6 +1,16 @@
 # 验收记录
 
-验收日期：2026-10-28；当前版本 **1.4.0**。Windows 上实际安装的 **Microsoft Edge 156.0.4314.42** 和 **Google Chrome 156.0.8078.48** 均已验证。没有使用模拟 OCR、模拟附件正文或模拟 IndexedDB。
+验收日期：2026-10-28；当前版本 **1.5.0**。Windows 上实际安装的 **Microsoft Edge 156.0.4314.42** 和 **Google Chrome 156.0.8078.48** 均已验证。没有使用模拟 OCR、模拟附件正文或模拟 IndexedDB。
+
+## 1.5.0 本地 MCP 验收
+
+- 54 条 Vitest 规则、备份和 MCP 契约测试通过；TypeScript、生产扩展/桥接 EXE/安装助手构建通过。在全新目录运行 `npm ci --ignore-scripts` 后重新构建通过。
+- Chrome 与 Edge 各 15 组核心业务、7 组自动识别回归通过；生产 ZIP 的新配置安装恢复分别通过 5 / 6 项检查。权限在原基础上增加 `nativeMessaging`，CSP 未放宽。
+- 两个浏览器各 11 组 MCP 端到端检查通过，使用实际 Windows 安装助手的安装模式，将随包桥接 EXE 放到中文路径并注册，再加载实际安装的扩展；通过真实 stdio JSON-RPC、Windows 命名管道、浏览器 Native Messaging 写入 IndexedDB，无模拟返回值。
+- 验证数据库 v1 → v2 的旧数据保留、MCP 初始化/工具发现、添加和查询日程、今日清单、工作台关闭后继续调用、多客户端并发去重、非法参数拒绝、人工修改保护、agent 来源备份往返与请求身份恢复。
+- 验证非工作台页面无法读取配置、关闭接入后旧配置失效、更换配置和错误口令被拒绝、删除后的旧请求不会复活、浏览器退出后返回错误。测试前后保存并恢复 Native Messaging 注册项，不覆盖用户原有接入配置。
+- 另以只读方式检查旧桥接配置目录的安装兼容：默认目录仅含旧配置时可继续安装，其他占用目录仍拒绝；旧文件保留。MCP 的连接口令未进入备份或截图。当前浏览器核心、识别和 MCP 报告均无 JS 错误，离线 HTTP 请求为 0。
+- 证据：`test-results/{chrome,edge}/mcp/results.json`、`mcp/connected.png`、`mcp/schedule-added.png`；其他证据仍在对应浏览器目录，干净构建记录为 `test-results/clean-build.json`。本轮 EXE 检查针对实际安装模式和 MCP 放置/注册，不将其描述为重新检查了安装助手所有 WinForms 按钮。
 
 ## 1.4.0 自动提取与紧凑日程验收
 

@@ -163,7 +163,7 @@ export function Detail({notice:n,jobs}:{notice:Notice;jobs:ParseJob[]}) {
             <input aria-label={`完成任务 ${t.text}`} type="checkbox" checked={t.done} onChange={e=>{const checked=e.currentTarget.checked;void update(x=>{x.tasks.find(y=>y.id===t.id)!.done=checked;});}}/>
             <input aria-label="任务内容" defaultValue={t.text} maxLength={1000} onBlur={e=>{const value=e.currentTarget.value.trim();void update(x=>{if(value)x.tasks.find(y=>y.id===t.id)!.text=value;});}}/>
             <input aria-label="任务日期" type="date" value={t.date} onChange={e=>{const value=e.currentTarget.value;void update(x=>{if(validDeadline(value))x.tasks.find(y=>y.id===t.id)!.date=value;});}}/>
-            {t.time&&<small>{t.time}</small>}
+            {(t.time||t.agent)&&<small title={t.agent?`来自 MCP · ${t.agent.client}${t.agent.notes?' · '+t.agent.notes:''}`:undefined}>{t.time}{t.agent&&<span> · MCP</span>}</small>}
             <button aria-label={`删除任务 ${t.text}`} onClick={()=>void update(x=>{x.tasks=x.tasks.filter(y=>y.id!==t.id);for(const a of x.actions||[])if(a.taskId===t.id){a.taskId=undefined;a.dismissed=true;}})}>×</button>
           </div>)}</div>
           <form className="task-add" onSubmit={e=>{e.preventDefault();if(!task.trim()||!validDeadline(taskDay)){setMessage('请填写任务内容和有效计划日期');return;}void update(x=>{x.tasks.push({id:id(),text:task.trim(),date:taskDay,done:false});});setTask('');}}>

@@ -1,6 +1,9 @@
 import { addSource, db } from './db';
 import { safeURL, LIMITS } from './model';
 import { DEFAULT_SETTINGS } from './settings';
+import {bridgeRequest,startMcpBridge} from './mcp/bridge';
+void startMcpBridge();
+chrome.runtime.onStartup.addListener(()=>{void startMcpBridge();});
 const open=async(hash='')=>chrome.tabs.create({url:chrome.runtime.getURL('dashboard.html')+hash});
 chrome.runtime.onInstalled.addListener(details=>{
   void (async()=>{
@@ -11,6 +14,9 @@ chrome.runtime.onInstalled.addListener(details=>{
   })();
 });
 chrome.runtime.onMessage.addListener((msg,_sender,respond)=>{
+  if(typeof msg?.type==='string'&&msg.type.startsWith('mcp-')){
+    void bridgeRequest(msg,_sender).then(respond,e=>respond({error:e instanceof Error?e.message:'MCP 操作失败'}));return true;
+  }
   if(msg?.type==='open'){void open(msg.hash||'').then(()=>respond({ok:true}));return true;}
   if(msg?.type==='save-capture') {
     void(async()=>{try {

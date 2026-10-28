@@ -1,0 +1,32 @@
+[
+  {
+    "name": "add_schedule",
+    "description": "向校事笺添加一条个人日程，立即保存。日期和时刻按目标浏览器本地时区解释。仅在用户要求安排时调用；必须明确日期，不猜测。为每次新建提供唯一 request_id，超时重试必须复用原 ID 和参数，避免重复创建。",
+    "inputSchema": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "request_id": {"type":"string","minLength":1,"maxLength":128,"pattern":"^[A-Za-z0-9._:-]+$","description":"本次新建的唯一标识；重试原请求使用同一标识。"},
+        "title": {"type":"string","minLength":1,"maxLength":200},
+        "date": {"type":"string","pattern":"^\\d{4}-\\d{2}-\\d{2}$","description":"明确计划日期 YYYY-MM-DD，按浏览器本地日期。"},
+        "time": {"type":"string","pattern":"^([01]\\d|2[0-3]):[0-5]\\d$","description":"可选时刻 HH:MM；无时刻不自动补全。"},
+        "notes": {"type":"string","maxLength":4000}
+      },
+      "required": ["request_id","title","date"]
+    },
+    "annotations": {"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}
+  },
+  {
+    "name": "list_schedules",
+    "description": "查询校事笺的个人任务日程，返回任务 ID、标题、日期、时刻、完成状态和 agent 来源。备注超过 500 字符会截断并标记 notes_truncated。默认仅列出未完成且未归档的任务，不读取附件和通知全文。日期范围含首尾两天，按浏览器本地日期。",
+    "inputSchema": {
+      "type":"object","additionalProperties":false,
+      "properties": {
+        "date_from":{"type":"string","pattern":"^\\d{4}-\\d{2}-\\d{2}$"},
+        "date_to":{"type":"string","pattern":"^\\d{4}-\\d{2}-\\d{2}$"},
+        "include_done":{"type":"boolean","default":false},
+        "limit":{"type":"integer","minimum":1,"maximum":100,"default":50}
+      }
+    },
+    "annotations": {"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}
+  }
+]

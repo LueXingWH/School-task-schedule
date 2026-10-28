@@ -17,6 +17,7 @@ using System.Windows.Forms;
 internal class InstallPlan { public string version {get;set;} public string payloadSha256 {get;set;} public Dictionary<string,string> files {get;set;} }
 internal class InstallResult {
     public bool success; public string version; public string folder; public string extensionId;
+    public bool mcpRegistered; public string mcpCommand;
     public string browser; public string browserPath; public string dashboardUrl; public int files;
     public bool manualConfirmationRequired = true; public bool shortcutCreated; public string warning; public string error;
 }
@@ -228,6 +229,10 @@ internal static class Setup {
         if(String.Equals(full,Path.GetPathRoot(full).TrimEnd(Path.DirectorySeparatorChar),StringComparison.OrdinalIgnoreCase))throw new Exception("请选择专用文件夹，不能直接安装到磁盘或共享根目录。");
         for(var current=new DirectoryInfo(full);current!=null;current=current.Parent)if(current.Exists&&(current.Attributes&FileAttributes.ReparsePoint)!=0)throw new Exception("安装目录不能经过符号链接或目录联接。");
         if(Directory.Exists(full)&&Directory.EnumerateFileSystemEntries(full).Any()) {
+            // Earlier bridge registration could create only this configuration folder
+            // before the first install. Keep it untouched while adding the application.
+            var entries=Directory.GetFileSystemEntries(full);
+            if(NormalizeDir(full)==NormalizeDir(DefaultRoot)&&entries.Length==1&&Path.GetFileName(entries[0])=="McpHosts"&&Directory.Exists(entries[0]))return full;
             string receipt=Path.Combine(full,"install-receipt.json");InstallResult existing=null;
             try {if(File.Exists(receipt))existing=Json.Deserialize<InstallResult>(File.ReadAllText(receipt));}catch {}
             if(existing==null||!existing.success||!String.Equals(existing.folder,Path.Combine(full,"Extension"),StringComparison.OrdinalIgnoreCase)||existing.extensionId!=ExtensionId(Path.Combine(full,"Extension")))throw new Exception("此目录已有其他文件，已保留。请选择空文件夹、新建专用文件夹，或选择原安装目录更新。");
@@ -272,6 +277,9 @@ internal static class Setup {
             File.WriteAllText(Path.Combine(root,"安装路径.txt"),target,new UTF8Encoding(false));
             File.WriteAllBytes(Path.Combine(root,"App.ico"),Resource("App.ico"));
             var result=new InstallResult {success=true,version=Plan.version,folder=target,extensionId=extensionId,browser=kind,browserPath=browserPath,dashboardUrl=url,files=seen.Count};
+            result.mcpCommand=Path.Combine(target,"bridge","Xiaoshijian.Mcp.exe");
+            try{XiaoshijianBridge.NativeRegistration.Register(result.mcpCommand,extensionId,kind);result.mcpRegistered=true;}
+            catch(Exception error){result.warning="扩展已准备，本地 MCP 桥接注册失败："+error.Message;}
             try{Directory.CreateDirectory(shortcuts);CreateShortcut(Path.Combine(shortcuts,"校事笺.lnk"),browserPath,url,root);result.shortcutCreated=true;}
             catch(Exception error){result.warning="文件已准备好，但桌面入口未创建："+error.Message;}
             File.WriteAllText(marker,Json.Serialize(result),new UTF8Encoding(false));

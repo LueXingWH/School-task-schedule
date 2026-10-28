@@ -2,7 +2,7 @@ import {mkdir,cp,copyFile,writeFile} from 'node:fs/promises';
 import {spawn} from 'node:child_process';
 import path from 'node:path';
 const target=path.resolve(`test-results/clean-build-${Date.now()}`);await mkdir(target,{recursive:true});
-for(const name of ['src','scripts','installer'])await cp(name,`${target}/${name}`,{recursive:true});
+for(const name of ['src','scripts','installer','bridge'])await cp(name,`${target}/${name}`,{recursive:true});
 await mkdir(`${target}/public`,{recursive:true});await copyFile('public/manifest.json',`${target}/public/manifest.json`);
 for(const name of ['package.json','package-lock.json','tsconfig.json','vite.config.ts','dashboard.html','popup.html'])await copyFile(name,`${target}/${name}`);
 const npmCLI=process.env.npm_execpath||path.join(path.dirname(process.execPath),'node_modules/npm/bin/npm-cli.js');

@@ -1,0 +1,13 @@
+import {mkdir,readFile,writeFile} from 'node:fs/promises';
+import {spawn} from 'node:child_process';
+import path from 'node:path';
+if(process.platform!=='win32')throw Error('本地 MCP 桥接需在 Windows 构建');
+const {version}=JSON.parse(await readFile('package.json','utf8'));
+await mkdir('dist/bridge',{recursive:true});await mkdir('test-results/bridge-build',{recursive:true});
+const info=path.resolve('test-results/bridge-build/AssemblyInfo.cs');
+await writeFile(info,`using System.Reflection;\n[assembly:AssemblyTitle("校事笺 MCP 桥接")]\n[assembly:AssemblyVersion("${version}.0")]\n`);
+const compiler=path.join(process.env.WINDIR||'C:/Windows','Microsoft.NET/Framework64/v4.0.30319/csc.exe');
+const output=path.resolve('dist/bridge/Xiaoshijian.Mcp.exe');
+const args=['/nologo','/target:exe','/platform:anycpu','/optimize+','/codepage:65001',`/out:${output}`,'/reference:System.Web.Extensions.dll','/reference:System.Security.dll',`/resource:${path.resolve('bridge/tools.json')},Tools.json`,path.resolve('bridge/NativeRegistration.cs'),path.resolve('bridge/Program.cs'),info];
+await new Promise((resolve,reject)=>{const p=spawn(compiler,args,{stdio:'inherit',windowsHide:true});p.on('error',reject);p.on('close',code=>code===0?resolve():reject(Error('MCP 桥接构建失败 '+code)));});
+console.log('本地 MCP / Native Messaging 桥接已构建（无需 Node / Python 运行时）');

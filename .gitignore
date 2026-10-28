@@ -10,3 +10,6 @@ public/vendor/
 
 # 本地会话数据与项目记忆，不进版本库
 .workbuddy/
+
+# 设置页下载的实际 MCP 配置含本机连接口令
+/xiaoshijian-mcp.json
