@@ -307,7 +307,7 @@ internal static class BrowserAutomation {
 }
 
 internal class SetupWindow:Form {
-    readonly ComboBox browser=new ComboBox();readonly Button install=new Button(),browse=new Button(),copy=new Button(),manage=new Button(),workbench=new Button();readonly TextBox folder=new TextBox(),managementAddress=new TextBox();readonly Label status=new Label(),loadPath=new Label();readonly string shortcutsOverride,testProfile;readonly bool noOpen;InstallResult installed,detectedResult;DetectedInstall detected;bool preparing,applyingResult,managementOpened,lastAutomated;readonly Timer clipboardSwap=new Timer(),detectDebounce=new Timer();
+    readonly ComboBox browser=new ComboBox();readonly Button install=new Button(),browse=new Button(),copy=new Button(),manage=new Button(),workbench=new Button();readonly TextBox folder=new TextBox(),managementAddress=new TextBox();readonly Label status=new Label(),loadPath=new Label(),detectLabel=new Label();readonly string shortcutsOverride,testProfile;readonly bool noOpen;InstallResult installed,detectedResult;DetectedInstall detected;bool preparing,applyingResult,managementOpened,lastAutomated;readonly Timer clipboardSwap=new Timer(),detectDebounce=new Timer();
     internal event Action<InstallResult> Completed;
     public SetupWindow(string initialRoot=null,string shortcutsDir=null,bool skipBrowserLaunch=false,string browserTestProfile=null) {
         shortcutsOverride=shortcutsDir;noOpen=skipBrowserLaunch;testProfile=browserTestProfile;
@@ -324,17 +324,17 @@ internal class SetupWindow:Form {
         folder.TextChanged+=delegate {UpdateLoadPath();if(!preparing&&!applyingResult){installed=null;copy.Enabled=workbench.Enabled=false;install.Enabled=true;install.Text="准备安装并打开浏览器";}ScheduleDetection();};UpdateLoadPath();
         copy.Text="复制扩展加载目录";copy.SetBounds(30,353,170,36);copy.Enabled=false;copy.Click+=delegate {var target=installed??detectedResult;if(target==null||String.IsNullOrEmpty(target.folder)){status.Text="请先准备安装，或确认扩展目录存在。";return;}try{Clipboard.SetText(target.folder);status.Text="扩展目录已复制。在浏览器的文件夹选择窗口按 Ctrl+V，然后确认。";}catch{status.Text="暂时无法访问剪贴板，请手动复制上方的扩展加载目录。";}};Controls.Add(copy);
         manage.Text="打开扩展管理页";manage.SetBounds(215,353,205,36);manage.Click+=delegate {OpenManagement();};Controls.Add(manage);
-        workbench.Text="加载完成后打开工作台";workbench.SetBounds(435,353,210,36);workbench.Enabled=false;workbench.Click+=delegate {
-            var target=installed??detectedResult;
-            if(target==null){status.Text="还没有可打开的工作台：请先准备安装，并在扩展管理页加载校事笺。";return;}
-            try{Setup.Launch(target.browserPath,target.dashboardUrl,testProfile);status.Text="已请求打开工作台。若浏览器显示无法访问此页：请先在扩展管理页确认校事笺已加载，并使用加载扩展时的同一浏览器配置，然后重试。";}catch(Exception error){status.Text="工作台未打开："+error.Message;}
+        workbench.Text="如何打开工作台";workbench.SetBounds(435,353,210,36);workbench.Enabled=false;workbench.Click+=delegate {
+            string prefix=detected!=null?"校事笺加载在「"+ProfileName(detected.profile)+"」配置，请在该配置下打开。":"";
+            status.Text=prefix+"打开工作台任选其一：① 双击桌面“校事笺”快捷方式；② 点浏览器工具栏右上角的校事笺图标；③ 在扩展管理页点校事笺的“详细信息”，里面有工作台链接。若浏览器显示无法访问：当前打开的不是加载校事笺的那个用户配置，切换配置后再试（ Edge 右上角头像可切换）。";
         };Controls.Add(workbench);
         clipboardSwap.Interval=4000;clipboardSwap.Tick+=delegate {clipboardSwap.Stop();if(installed==null)return;try{Clipboard.SetText(installed.folder);status.Text="已把扩展加载目录放入剪贴板：点击“加载解压缩的扩展”后，在文件夹窗口按 Ctrl+V 选择该目录。";}catch{}};
         AddLabel("管理页地址",30,408,105,28);managementAddress.SetBounds(140,405,505,28);managementAddress.ReadOnly=true;Controls.Add(managementAddress);
         browser.SelectedIndexChanged+=delegate {UpdateManagementAddress();ScheduleDetection();};UpdateManagementAddress();
         AddLabel("① 浏览器会自动打开扩展管理页；若没有跳转，在地址栏按 Ctrl+V、回车。\r\n② 开启“开发人员模式”，点击“加载解压缩的扩展”，在文件夹窗口按 Ctrl+V 粘贴扩展目录。\r\n③ 加载完成，校事笺自动打开工作台；以后从桌面“校事笺”进入。",30,451,615,78);
         status.SetBounds(30,543,615,62);status.Text="点击中间按钮，助手会打开浏览器并自动进入扩展管理页；准备文件前也可使用。";status.ForeColor=Color.FromArgb(87,112,84);Controls.Add(status);
-        AddLabel("更换安装位置会改变本地扩展 ID。已有数据请先导出备份，再在新工作台恢复。",30,625,615,44);
+        detectLabel.SetBounds(30,611,615,26);detectLabel.ForeColor=Color.FromArgb(87,112,84);detectLabel.Font=new Font(Font.FontFamily,10,FontStyle.Bold);Controls.Add(detectLabel);
+        AddLabel("更换安装位置会改变本地扩展 ID。已有数据请先导出备份，再在新工作台恢复。",30,643,615,44);
         FormClosing+=delegate(object sender,FormClosingEventArgs e){if(preparing){e.Cancel=true;status.Text="正在校验和放置文件，请稍候完成后再关闭。";}};
         if(testProfile==null){detectDebounce.Interval=600;detectDebounce.Tick+=delegate{RunDetection();};ScheduleDetection();}
     }
@@ -349,6 +349,7 @@ internal class SetupWindow:Form {
         var loaded=Setup.DetectLoaded(kind,target,testProfile);
         InstallResult receipt=null;
         try{string receiptFile=Path.Combine(root,"install-receipt.json");if(File.Exists(receiptFile)){var parsed=Setup.Json.Deserialize<InstallResult>(File.ReadAllText(receiptFile));if(parsed!=null&&parsed.success&&!String.IsNullOrEmpty(parsed.folder))receipt=parsed;}}catch{}
+        string vendor=kind=="edge"?"Edge":"Chrome";
         if(loaded!=null) {
             detected=loaded;
             string browserPath=Setup.FindBrowser(kind);
@@ -356,19 +357,24 @@ internal class SetupWindow:Form {
             if(!String.Equals(Setup.NormalizeDir(Path.GetDirectoryName(Path.GetFullPath(loaded.folder))),Setup.NormalizeDir(root),StringComparison.OrdinalIgnoreCase)&&Directory.Exists(Path.GetDirectoryName(loaded.folder))) {
                 applyingResult=true;folder.Text=Path.GetDirectoryName(loaded.folder);applyingResult=false;UpdateLoadPath();
             }
-            string profileName;try{profileName=Path.GetFileName(loaded.profile);}catch{profileName="当前配置";}
-            string vendor=kind=="edge"?"Edge":"Chrome";
+            string profileName=ProfileName(loaded.profile);
+            detectLabel.Text="检测结果：校事笺 "+(loaded.version??"")+" 已在"+vendor+"「"+profileName+"」配置"+(loaded.enabled?"中加载，不必重新安装":"中加载但已被停用");
+            detectLabel.ForeColor=loaded.enabled?Color.FromArgb(23,111,98):Color.FromArgb(176,108,22);
             status.Text=loaded.enabled
-                ?"检测到校事笺 "+(loaded.version??"")+" 已在"+vendor+"的「"+profileName+"」配置中加载（"+loaded.folder+"）。可直接点“打开工作台”，不必重新安装；重新准备文件仅用于更新或修复。"
-                :"检测到校事笺已在"+vendor+"的「"+profileName+"」配置中加载，但当前处于停用状态。请点“打开扩展管理页”重新开启。";
+                ?"检测到已有安装（"+loaded.folder+"），无需重新准备。点“如何打开工作台”查看打开方法；重新准备文件仅用于更新或修复。"
+                :"检测到校事笺在"+vendor+"的「"+profileName+"」配置中加载，但当前处于停用状态。请点“打开扩展管理页”重新开启。";
             copy.Enabled=manage.Enabled=workbench.Enabled=true;
             install.Text=loaded.version==Setup.Plan.version?"文件已就绪（重新准备可修复）":"准备安装并打开浏览器（更新文件）";
         } else if(receipt!=null) {
-            status.Text="检测到此前用助手准备过文件（v"+receipt.version+"，位于 "+receipt.folder+"）。若当前浏览器配置里还没有加载，点“打开扩展管理页”完成首次加载即可，不必重新准备。";
+            detectLabel.Text="检测结果：此前已准备过文件 v"+receipt.version+"，"+vendor+"里尚未检测到已加载";detectLabel.ForeColor=Color.FromArgb(176,108,22);
+            status.Text="检测到此前用助手准备过文件（位于 "+receipt.folder+"）。若这个浏览器里还没加载，点“打开扩展管理页”完成首次加载即可，不必重新准备。";
             copy.Enabled=manage.Enabled=workbench.Enabled=true;
             detectedResult=new InstallResult{success=true,version=receipt.version,folder=receipt.folder,extensionId=receipt.extensionId,browser=kind,browserPath=receipt.browserPath??Setup.FindBrowser(kind),dashboardUrl=receipt.dashboardUrl,manualConfirmationRequired=true};
+        } else {
+            detectLabel.Text="检测结果：未发现已安装的校事笺，按首次安装进行";detectLabel.ForeColor=Color.FromArgb(120,120,120);
         }
     }
+    static string ProfileName(string profilePath){try{return String.IsNullOrEmpty(profilePath)?"当前配置":Path.GetFileName(profilePath);}catch{return "当前配置";}}
     void UpdateManagementAddress(){managementAddress.Text=(browser.SelectedIndex==0?"edge":"chrome")+"://extensions/";}
     void OpenManagement() {
         managementOpened=false;lastAutomated=false;BrowserAutomation.LastNavigateDiagnostic=null;bool copied=false;
