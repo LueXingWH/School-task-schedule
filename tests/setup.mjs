@@ -28,17 +28,20 @@ try {
   const shortcut=JSON.parse((await run('powershell.exe',['-NoProfile','-NonInteractive','-File',path.resolve('tests/inspect-shortcut.ps1'),'-Path',path.join(desktop,'校事笺.lnk')],{windowsHide:true,encoding:'utf8'})).stdout.replace(/^\uFEFF/,''));
   assert.equal(shortcut.target.toLowerCase(),installed.browserPath.toLowerCase());assert.equal(shortcut.arguments,`"${installed.dashboardUrl}"`);results.push('真实 Windows 桌面快捷方式目标和工作台参数正确');
   const buttonReport=path.join(out,'management-button.json');
-  const managementPageEvent=context.waitForEvent('page',{timeout:15000});
+  // Put a sentinel on the system clipboard first: the helper must NOT overwrite the user's clipboard.
+  await run('powershell.exe',['-NoProfile','-NonInteractive','-Command','Set-Clipboard -Value "xiaoshijian-clipboard-sentinel"'],{windowsHide:true,timeout:15000});
+  const managementPageEvent=context.waitForEvent('page',{timeout:30000});
   await run(executable,['--ui-manage-test','--browser-profile',profile,'--browser',process.env.TEST_BROWSER==='chrome'?'chrome':'edge','--result',buttonReport],{windowsHide:true,timeout:30000});
   const managementPage=await managementPageEvent;
   const button=JSON.parse(await readFile(buttonReport,'utf8')),managementURL=(browserSlug==='edge'?'edge':'chrome')+'://extensions/';
-  assert(button.success);assert.equal(button.managementAddress,managementURL);assert.equal(button.clipboardAddress,managementURL);assert.equal(button.buttonText,'打开扩展管理页');assert.equal(button.copyDirectoryEnabled,false);
-  // The helper pastes the management URL into the new window's address bar; if paste automation is
-  // unavailable or the pasted navigation doesn't land, fall back to manual navigation via clipboard.
-  if(!button.automated){assert.match(button.status,/Ctrl\+V/);}
-  await managementPage.waitForURL(/(edge|chrome):\/\/extensions/,{timeout:12000}).catch(async()=>{await managementPage.goto(button.clipboardAddress);await managementPage.waitForURL(/(edge|chrome):\/\/extensions/);});
+  assert(button.success);assert.equal(button.managementAddress,managementURL);assert.equal(button.buttonText,'打开扩展管理页');assert.equal(button.copyDirectoryEnabled,false);
+  const clip=(await run('powershell.exe',['-NoProfile','-NonInteractive','-Command','Get-Clipboard'],{windowsHide:true,encoding:'utf8'})).stdout.replace(/^\uFEFF/,'').trim();
+  assert.equal(clip,'xiaoshijian-clipboard-sentinel');
+  assert.match(button.status,/开发人员模式/);assert.match(button.status,/复制/);
+  // The helper only shows and opens the browser; navigation to the manage page is the user's action.
+  await managementPage.goto(button.managementAddress);await managementPage.waitForURL(/(edge|chrome):\/\/extensions/);
   await managementPage.getByText(/^(开发人员模式|开发者模式|Developer mode)$/).filter({visible:true}).first().waitFor({timeout:20000}).catch(async()=>{await managementPage.locator('#dev-switch, extensions-manager').first().waitFor({state:'visible',timeout:20000});});await managementPage.screenshot({path:path.join(out,'management-page.png')});await managementPage.close();
-  results.push(`实际点击 WinForms 管理入口，浏览器新窗口${button.automated?'由助手自动粘贴地址并进入':'按剪贴板指引导航进入'}真实扩展管理页`);
+  results.push('实际点击 WinForms 管理入口：浏览器新窗口打开且用户剪贴板未被覆写，状态栏提示复制网址进入，并写明开发人员模式开关位置（Edge 左下角 / Chrome 右上角）');
   const runtime=await loadExtension(context,installed.folder);assert.equal(runtime.id,installed.extensionId);
   let welcome=await wait(async()=>context.pages().find(p=>p.url()===runtime.base+'/dashboard.html#welcome'));await welcome.getByRole('heading',{name:'安装完成，可以开始收录了'}).waitFor();
   assert.deepEqual((await welcome.evaluate(()=>chrome.storage.local.get('settings'))).settings,{upcomingDays:7,sort:'deadline',compact:false});results.push('实际加载准备目录，扩展 ID 与快捷方式一致，首次自动打开欢迎页并配置默认设置');
