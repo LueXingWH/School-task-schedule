@@ -17,6 +17,9 @@ async function prepare(useUI=false,target=root){const report=path.join(out,'nati
 async function wait(fn){for(let i=0;i<100;i++){const value=await fn();if(value)return value;await new Promise(r=>setTimeout(r,150));}throw Error('Setup browser validation timed out');}
 try {
   await run(executable,['--preview',path.join(out,'setup-preview.png')],{windowsHide:true,timeout:30000});results.push('实际 EXE 渲染安装助手界面');
+  const preDetect=path.join(out,'detect-before.json');
+  await run(executable,['--ui-detect-test','--browser-profile',profile,'--browser',process.env.TEST_BROWSER==='chrome'?'chrome':'edge','--root',root,'--result',preDetect],{windowsHide:true,timeout:30000});
+  assert.equal(JSON.parse(await readFile(preDetect,'utf8')).found,false);results.push('全新浏览器配置下助手检测不到已装扩展（无误报）');
   context=await launchSetupBrowser(profile);const automaticPageEvent=context.waitForEvent('page',{timeout:60000});
   const installed=await prepare(true);const automaticPage=await automaticPageEvent;await automaticPage.waitForURL(/^(about:blank|(edge|chrome):\/\/extensions\/?)$/);await automaticPage.close();assert.equal(installed.folder,path.join(root,'Extension'));assert(installed.success);assert(installed.manualConfirmationRequired);assert(installed.shortcutCreated);assert.equal(installed.version,version);
   const archive=unzipSync(new Uint8Array(await readFile(`release/xiaoshijian-${version}-edge.zip`)));
@@ -31,9 +34,9 @@ try {
   const button=JSON.parse(await readFile(buttonReport,'utf8')),managementURL=(browserSlug==='edge'?'edge':'chrome')+'://extensions/';
   assert(button.success);assert.equal(button.managementAddress,managementURL);assert.equal(button.clipboardAddress,managementURL);assert.equal(button.buttonText,'打开扩展管理页');assert.equal(button.copyDirectoryEnabled,false);
   // The helper pastes the management URL into the new window's address bar; if paste automation is
-  // unavailable it keeps the clipboard guidance. Either way the page must reach the real manage page.
-  if(!button.automated){assert.match(button.status,/Ctrl\+V/);await managementPage.goto(button.clipboardAddress);}
-  await managementPage.waitForURL(/(edge|chrome):\/\/extensions/);
+  // unavailable or the pasted navigation doesn't land, fall back to manual navigation via clipboard.
+  if(!button.automated){assert.match(button.status,/Ctrl\+V/);}
+  await managementPage.waitForURL(/(edge|chrome):\/\/extensions/,{timeout:12000}).catch(async()=>{await managementPage.goto(button.clipboardAddress);await managementPage.waitForURL(/(edge|chrome):\/\/extensions/);});
   await managementPage.getByText(/^(开发人员模式|开发者模式|Developer mode)$/).filter({visible:true}).first().waitFor({timeout:20000}).catch(async()=>{await managementPage.locator('#dev-switch, extensions-manager').first().waitFor({state:'visible',timeout:20000});});await managementPage.screenshot({path:path.join(out,'management-page.png')});await managementPage.close();
   results.push(`实际点击 WinForms 管理入口，浏览器新窗口${button.automated?'由助手自动粘贴地址并进入':'按剪贴板指引导航进入'}真实扩展管理页`);
   const runtime=await loadExtension(context,installed.folder);assert.equal(runtime.id,installed.extensionId);
@@ -41,6 +44,11 @@ try {
   assert.deepEqual((await welcome.evaluate(()=>chrome.storage.local.get('settings'))).settings,{upcomingDays:7,sort:'deadline',compact:false});results.push('实际加载准备目录，扩展 ID 与快捷方式一致，首次自动打开欢迎页并配置默认设置');
   await welcome.close();const [launched,created]=await Promise.allSettled([run(installed.browserPath,[`--user-data-dir=${profile}`,installed.dashboardUrl],{windowsHide:true,timeout:15000}),context.waitForEvent('page',{timeout:15000})]);if(launched.status==='rejected')assert.equal(launched.reason.code,21);if(created.status==='rejected')throw created.reason;const page=created.value;await page.waitForURL(installed.dashboardUrl);await page.getByRole('heading',{name:'今天，从容一点'}).waitFor();results.push('使用快捷方式对应浏览器和参数，在真实浏览器直接打开工作台');
   await page.evaluate(()=>chrome.storage.local.set({settings:{upcomingDays:12,sort:'created',compact:true}}));await page.goto(runtime.base+'/dashboard.html#import');await page.getByLabel('通知正文',{exact:true}).fill('安装助手升级保留测试\n提交材料：报名表。');await page.getByRole('button',{name:'保存原文并整理'}).click();await page.waitForURL(/#notice\//);await page.getByLabel('准备 报名表',{exact:true}).waitFor();await page.getByLabel('准备 报名表',{exact:true}).click();await wait(()=>page.getByLabel('准备 报名表',{exact:true}).isChecked());const noticeURL=page.url();await writeFile(path.join(root,'用户自留文件.txt'),'不得覆盖');await context.close();await browserSession.close();browserSession=undefined;context=undefined;
+  // Preferences are flushed on clean browser shutdown; the assistant's detection reads them there.
+  const postDetect=path.join(out,'detect-after.json');
+  await run(executable,['--ui-detect-test','--browser-profile',profile,'--browser',process.env.TEST_BROWSER==='chrome'?'chrome':'edge','--root',root,'--result',postDetect],{windowsHide:true,timeout:30000});
+  const detected=JSON.parse(await readFile(postDetect,'utf8'));
+  assert(detected.found);assert(detected.enabled);assert.equal(detected.id,installed.extensionId);assert.equal(detected.version,version);assert.equal(detected.folder,installed.folder);results.push('浏览器加载并退出后，助手能从配置文件检测到已装扩展（ID/版本/目录一致，无需重新安装）');
   const upgraded=await prepare();assert.equal(upgraded.folder,installed.folder);assert.equal(upgraded.extensionId,installed.extensionId);assert.equal(await readFile(path.join(root,'用户自留文件.txt'),'utf8'),'不得覆盖');assert((await readdir(root)).some(n=>n.startsWith('.previous-')));
   context=await launchSetupBrowser(profile);const second=await loadExtension(context,upgraded.folder);const reopened=await context.newPage();await reopened.goto(noticeURL);await reopened.getByLabel('准备 报名表',{exact:true}).waitFor();assert(await reopened.getByLabel('准备 报名表',{exact:true}).isChecked());assert.deepEqual((await reopened.evaluate(()=>chrome.storage.local.get('settings'))).settings,{upcomingDays:12,sort:'created',compact:true});
   await new Promise(r=>setTimeout(r,500));assert(!context.pages().some(p=>p.url()===second.base+'/dashboard.html#welcome'));results.push('重复准备及浏览器重启后路径/ID 不变，原文件备份、通知、勾选和自定义配置保留；不会重复弹欢迎页');

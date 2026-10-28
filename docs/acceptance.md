@@ -8,7 +8,7 @@
 
 新版在准备文件前实际点击 WinForms 的“打开扩展管理页”按钮，验证真实浏览器打开新窗口、读取真实系统剪贴板并核对 Edge/Chrome 对应网址；助手尝试在新窗口地址栏自动粘贴管理页地址并回车，被系统拒绝前台切换时按剪贴板指引导航，两条路径均断言最终到达真实管理页并检查开发人员模式控件、截图；自动化只替代地址栏粘贴，不将这一步描述为绕过浏览器确认。
 
-原有 8 组安装检查与新增按钮检查合计每个浏览器 9 组。记录分别为 `test-results/setup-results-edge.json`、`test-results/setup-results-chrome.json`，均绑定交付 EXE 的 SHA-256。两个浏览器的核心、ZIP 安装和 26 条单元测试按当前版本回归。
+原有 8 组安装检查、按钮检查与两条检测检查合计每个浏览器 11 组：全新配置下检测报告"未找到"（无误报）；扩展加载并正常退出浏览器后，助手从该配置的 `Secure Preferences` 检测到已装扩展，ID、版本、目录与安装结果一致（Edge 156 的记录无 `state` 字段，启停按 `disable_reasons` 位掩码判断）。记录分别为 `test-results/setup-results-edge.json`、`test-results/setup-results-chrome.json`，均绑定交付 EXE 的 SHA-256。两个浏览器的核心、ZIP 安装和 26 条单元测试按当前版本回归。
 
 ## 1.2.1 自选目录验收
 

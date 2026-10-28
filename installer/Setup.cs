@@ -19,8 +19,10 @@ internal class InstallResult {
     public string browser; public string browserPath; public string dashboardUrl; public int files;
     public bool manualConfirmationRequired = true; public bool shortcutCreated; public string warning; public string error;
 }
+internal class DetectedInstall { public string id; public string profile; public string folder; public string version; public bool enabled; }
 internal static class Setup {
-    internal static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
+    internal static readonly JavaScriptSerializer Json = CreateJson();
+    static JavaScriptSerializer CreateJson(){var serializer=new JavaScriptSerializer();serializer.MaxJsonLength=int.MaxValue;return serializer;}
     internal static readonly string DefaultRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Xiaoshijian");
     internal static readonly InstallPlan Plan = Json.Deserialize<InstallPlan>(Encoding.UTF8.GetString(Resource("InstallPlan.json")));
     [STAThread]
@@ -44,6 +46,15 @@ internal static class Setup {
                 if (String.IsNullOrEmpty(root) || String.IsNullOrEmpty(shortcuts) || String.IsNullOrEmpty(resultFile)) throw new Exception("测试/命令行安装必须指定 --root、--shortcuts-dir 和 --result。");
                 var result = System.Threading.Tasks.Task.Run(()=>Install(root, shortcuts, Value(args, "--browser") ?? "edge", delegate(string s) {})).GetAwaiter().GetResult();
                 File.WriteAllText(resultFile, Json.Serialize(result), new UTF8Encoding(false)); return 0;
+            }
+            if(args.Contains("--ui-detect-test")) {
+                if(String.IsNullOrEmpty(resultFile))throw new Exception("检测测试必须指定 --result。");
+                string kind=Value(args,"--browser")??"edge";if(kind!="edge"&&kind!="chrome")kind="edge";
+                string root=Value(args,"--root"),userData=Value(args,"--browser-profile");
+                string expectedFolder=String.IsNullOrEmpty(root)?null:Path.Combine(Path.GetFullPath(root),"Extension");
+                var found=DetectLoaded(kind,expectedFolder,userData);
+                File.WriteAllText(resultFile,Json.Serialize(new {found=found!=null,enabled=found!=null&&found.enabled,id=found==null?null:found.id,folder=found==null?null:found.folder,profile=found==null?null:Path.GetFileName(found.profile),version=found==null?null:found.version}),new UTF8Encoding(false));
+                return 0;
             }
             if(args.Contains("--ui-install-only")) {
                 string root=Value(args,"--root"),shortcuts=Value(args,"--shortcuts-dir");
@@ -84,6 +95,46 @@ internal static class Setup {
         if(browserPath==null)throw new Exception("没有找到所选浏览器，请先安装或改选 Microsoft Edge / Google Chrome。");
         int major; if(!Int32.TryParse(FileVersionInfo.GetVersionInfo(browserPath).ProductVersion.Split('.')[0],out major)||major<154)throw new Exception("所选浏览器版本过旧，请先更新浏览器。本版要求 Chromium 154 或更新版本。");
     }
+    // Detect a previously loaded unpacked 校事笺 extension by reading the browser profile's
+    // Preferences / Secure Preferences (extensions.settings). Only reads files; never writes.
+    internal static DetectedInstall DetectLoaded(string kind,string expectedFolder,string userDataOverride) {
+        string userData=userDataOverride??(kind=="edge"
+            ?Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),@"Microsoft\Edge\User Data")
+            :Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),@"Google\Chrome\User Data"));
+        if(String.IsNullOrEmpty(userData)||!Directory.Exists(userData))return null;
+        string expectedId=String.IsNullOrEmpty(expectedFolder)?null:ExtensionId(expectedFolder);
+        string expectedPath=null;try{if(!String.IsNullOrEmpty(expectedFolder))expectedPath=Path.GetFullPath(expectedFolder);}catch{}
+        var profiles=Directory.GetDirectories(userData).Where(d=>{string n=Path.GetFileName(d);return n=="Default"||n.StartsWith("Profile ",StringComparison.Ordinal);}).OrderBy(d=>d=="Default"?0:1).ThenBy(d=>d,StringComparer.Ordinal);
+        DetectedInstall byName=null;
+        foreach(string profile in profiles) {
+            foreach(string fileName in new[]{"Preferences","Secure Preferences"}) {
+                string file=Path.Combine(profile,fileName);if(!File.Exists(file))continue;
+                Dictionary<string,object> root;try{root=Json.Deserialize<Dictionary<string,object>>(File.ReadAllText(file));}catch{continue;}
+                var extensions=root!=null&&root.ContainsKey("extensions")?root["extensions"] as Dictionary<string,object>:null;
+                var settings=extensions!=null&&extensions.ContainsKey("settings")?extensions["settings"] as Dictionary<string,object>:null;
+                if(settings==null)continue;
+                foreach(var pair in settings) {
+                    var entry=pair.Value as Dictionary<string,object>;if(entry==null)continue;
+                    object stored;if(!entry.TryGetValue("path",out stored))continue;string extensionPath=stored as string;
+                    if(String.IsNullOrEmpty(extensionPath)||!Path.IsPathRooted(extensionPath))continue;   // packed/store entries use relative paths
+                    if(!Directory.Exists(extensionPath))continue;
+                    bool exact=(!String.IsNullOrEmpty(expectedId)&&String.Equals(pair.Key,expectedId,StringComparison.OrdinalIgnoreCase))
+                        ||(expectedPath!=null&&String.Equals(NormalizeDir(extensionPath),NormalizeDir(expectedPath),StringComparison.OrdinalIgnoreCase));
+                    string manifestName=null,manifestVersion=null;
+                    try{var manifest=Json.Deserialize<Dictionary<string,object>>(File.ReadAllText(Path.Combine(extensionPath,"manifest.json")));if(manifest!=null){manifestName=manifest["name"] as string;manifestVersion=manifest["version"] as string;}}catch{}
+                    if(!exact&&manifestName!="校事笺")continue;
+                    bool enabled=true;
+                    object state;if(entry.TryGetValue("state",out state)){try{enabled=Convert.ToInt64(state)==1;}catch{}}
+                    object reasons;if(enabled&&entry.TryGetValue("disable_reasons",out reasons)) {try{enabled=Convert.ToInt64(reasons)==0;}catch{}}   // newer Chromium: bitfield, absent/0 = enabled
+                    var found=new DetectedInstall{id=pair.Key,profile=profile,folder=extensionPath,version=manifestVersion,enabled=enabled};
+                    if(exact)return found;
+                    if(byName==null)byName=found;
+                }
+            }
+        }
+        return byName;
+    }
+    internal static string NormalizeDir(string folder){try{return Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar).ToLowerInvariant();}catch{return folder;}}
     static string OwnedRoot(string root) {
         if(String.IsNullOrWhiteSpace(root)||!Path.IsPathRooted(root)||Path.GetPathRoot(root).Length<3)throw new Exception("请输入完整的安装路径，例如 D:\\应用\\校事笺。");
         string full=Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
@@ -256,13 +307,13 @@ internal static class BrowserAutomation {
 }
 
 internal class SetupWindow:Form {
-    readonly ComboBox browser=new ComboBox();readonly Button install=new Button(),browse=new Button(),copy=new Button(),manage=new Button(),workbench=new Button();readonly TextBox folder=new TextBox(),managementAddress=new TextBox();readonly Label status=new Label(),loadPath=new Label();readonly string shortcutsOverride,testProfile;readonly bool noOpen;InstallResult installed;bool preparing,applyingResult,managementOpened,lastAutomated;readonly Timer clipboardSwap=new Timer();
+    readonly ComboBox browser=new ComboBox();readonly Button install=new Button(),browse=new Button(),copy=new Button(),manage=new Button(),workbench=new Button();readonly TextBox folder=new TextBox(),managementAddress=new TextBox();readonly Label status=new Label(),loadPath=new Label();readonly string shortcutsOverride,testProfile;readonly bool noOpen;InstallResult installed,detectedResult;DetectedInstall detected;bool preparing,applyingResult,managementOpened,lastAutomated;readonly Timer clipboardSwap=new Timer(),detectDebounce=new Timer();
     internal event Action<InstallResult> Completed;
     public SetupWindow(string initialRoot=null,string shortcutsDir=null,bool skipBrowserLaunch=false,string browserTestProfile=null) {
         shortcutsOverride=shortcutsDir;noOpen=skipBrowserLaunch;testProfile=browserTestProfile;
         Text="校事笺 · 便捷安装助手 "+Setup.Plan.version;Size=new Size(700,720);MinimumSize=Size;MaximumSize=Size;StartPosition=FormStartPosition.CenterScreen;Font=new Font("Microsoft YaHei UI",10);BackColor=Color.FromArgb(246,248,242);AutoScaleMode=AutoScaleMode.Dpi;MaximizeBox=false;
         var title=new Label {Text="收好通知，安装也轻一点",Font=new Font(Font.FontFamily,21,FontStyle.Bold),ForeColor=Color.FromArgb(23,111,98),Location=new Point(30,26),AutoSize=true};Controls.Add(title);
-        AddLabel("自动放置离线资源 · 创建桌面入口 · 首次加载后自动配置",30,82,630,30);
+        AddLabel("已装过的自动识别 · 自动放置资源 · 创建桌面入口",30,82,630,30);
         AddLabel("本助手准备本地文件。首次仍需在浏览器中开启开发人员模式并确认加载。",30,121,630,42);
         browser.SetBounds(30,174,260,36);browser.DropDownStyle=ComboBoxStyle.DropDownList;browser.Items.AddRange(new object[]{"Microsoft Edge（推荐）","Google Chrome"});browser.SelectedIndex=Setup.FindBrowser("edge")!=null?0:1;Controls.Add(browser);
         install.Text="准备安装并打开浏览器";install.SetBounds(315,169,330,43);install.BackColor=Color.FromArgb(23,111,98);install.ForeColor=Color.White;install.FlatStyle=FlatStyle.Flat;install.Click+=InstallClick;Controls.Add(install);
@@ -270,17 +321,53 @@ internal class SetupWindow:Form {
         folder.SetBounds(30,258,500,28);folder.ReadOnly=false;folder.Text=initialRoot??Setup.DefaultRoot;Controls.Add(folder);
         browse.Text="浏览…";browse.SetBounds(545,254,100,35);browse.Click+=BrowseClick;Controls.Add(browse);
         loadPath.SetBounds(30,299,615,46);loadPath.ForeColor=Color.FromArgb(87,112,84);Controls.Add(loadPath);
-        folder.TextChanged+=delegate {UpdateLoadPath();if(!preparing&&!applyingResult){installed=null;copy.Enabled=workbench.Enabled=false;install.Enabled=true;install.Text="准备安装并打开浏览器";}};UpdateLoadPath();
-        copy.Text="复制扩展加载目录";copy.SetBounds(30,353,170,36);copy.Enabled=false;copy.Click+=delegate {try{Clipboard.SetText(installed.folder);status.Text="扩展目录已复制。在浏览器的文件夹选择窗口按 Ctrl+V，然后确认。";}catch{status.Text="暂时无法访问剪贴板，请手动复制上方的扩展加载目录。";}};Controls.Add(copy);
+        folder.TextChanged+=delegate {UpdateLoadPath();if(!preparing&&!applyingResult){installed=null;copy.Enabled=workbench.Enabled=false;install.Enabled=true;install.Text="准备安装并打开浏览器";}ScheduleDetection();};UpdateLoadPath();
+        copy.Text="复制扩展加载目录";copy.SetBounds(30,353,170,36);copy.Enabled=false;copy.Click+=delegate {var target=installed??detectedResult;if(target==null||String.IsNullOrEmpty(target.folder)){status.Text="请先准备安装，或确认扩展目录存在。";return;}try{Clipboard.SetText(target.folder);status.Text="扩展目录已复制。在浏览器的文件夹选择窗口按 Ctrl+V，然后确认。";}catch{status.Text="暂时无法访问剪贴板，请手动复制上方的扩展加载目录。";}};Controls.Add(copy);
         manage.Text="打开扩展管理页";manage.SetBounds(215,353,205,36);manage.Click+=delegate {OpenManagement();};Controls.Add(manage);
-        workbench.Text="加载完成后打开工作台";workbench.SetBounds(435,353,210,36);workbench.Enabled=false;workbench.Click+=delegate {try{Setup.Launch(installed.browserPath,installed.dashboardUrl);status.Text="已请求打开工作台。若浏览器显示无法访问此页：请先在扩展管理页确认校事笺已加载，并使用加载扩展时的同一浏览器配置，然后重试。";}catch(Exception error){status.Text="工作台未打开："+error.Message;}};Controls.Add(workbench);
+        workbench.Text="加载完成后打开工作台";workbench.SetBounds(435,353,210,36);workbench.Enabled=false;workbench.Click+=delegate {
+            var target=installed??detectedResult;
+            if(target==null){status.Text="还没有可打开的工作台：请先准备安装，并在扩展管理页加载校事笺。";return;}
+            try{Setup.Launch(target.browserPath,target.dashboardUrl,testProfile);status.Text="已请求打开工作台。若浏览器显示无法访问此页：请先在扩展管理页确认校事笺已加载，并使用加载扩展时的同一浏览器配置，然后重试。";}catch(Exception error){status.Text="工作台未打开："+error.Message;}
+        };Controls.Add(workbench);
         clipboardSwap.Interval=4000;clipboardSwap.Tick+=delegate {clipboardSwap.Stop();if(installed==null)return;try{Clipboard.SetText(installed.folder);status.Text="已把扩展加载目录放入剪贴板：点击“加载解压缩的扩展”后，在文件夹窗口按 Ctrl+V 选择该目录。";}catch{}};
         AddLabel("管理页地址",30,408,105,28);managementAddress.SetBounds(140,405,505,28);managementAddress.ReadOnly=true;Controls.Add(managementAddress);
-        browser.SelectedIndexChanged+=delegate {UpdateManagementAddress();};UpdateManagementAddress();
+        browser.SelectedIndexChanged+=delegate {UpdateManagementAddress();ScheduleDetection();};UpdateManagementAddress();
         AddLabel("① 浏览器会自动打开扩展管理页；若没有跳转，在地址栏按 Ctrl+V、回车。\r\n② 开启“开发人员模式”，点击“加载解压缩的扩展”，在文件夹窗口按 Ctrl+V 粘贴扩展目录。\r\n③ 加载完成，校事笺自动打开工作台；以后从桌面“校事笺”进入。",30,451,615,78);
         status.SetBounds(30,543,615,62);status.Text="点击中间按钮，助手会打开浏览器并自动进入扩展管理页；准备文件前也可使用。";status.ForeColor=Color.FromArgb(87,112,84);Controls.Add(status);
         AddLabel("更换安装位置会改变本地扩展 ID。已有数据请先导出备份，再在新工作台恢复。",30,625,615,44);
         FormClosing+=delegate(object sender,FormClosingEventArgs e){if(preparing){e.Cancel=true;status.Text="正在校验和放置文件，请稍候完成后再关闭。";}};
+        if(testProfile==null){detectDebounce.Interval=600;detectDebounce.Tick+=delegate{RunDetection();};ScheduleDetection();}
+    }
+    void ScheduleDetection(){if(testProfile!=null)return;detectDebounce.Stop();detectDebounce.Start();}
+    // Startup / change-time check: is 校事笺 already prepared here, and is it already loaded in the browser?
+    void RunDetection() {
+        detectDebounce.Stop();
+        if(preparing||installed!=null)return;
+        detected=null;detectedResult=null;copy.Enabled=workbench.Enabled=false;
+        string kind=browser.SelectedIndex==0?"edge":"chrome";string root=folder.Text.Trim(),target;
+        try{target=Path.Combine(Path.GetFullPath(root),"Extension");}catch{return;}
+        var loaded=Setup.DetectLoaded(kind,target,testProfile);
+        InstallResult receipt=null;
+        try{string receiptFile=Path.Combine(root,"install-receipt.json");if(File.Exists(receiptFile)){var parsed=Setup.Json.Deserialize<InstallResult>(File.ReadAllText(receiptFile));if(parsed!=null&&parsed.success&&!String.IsNullOrEmpty(parsed.folder))receipt=parsed;}}catch{}
+        if(loaded!=null) {
+            detected=loaded;
+            string browserPath=Setup.FindBrowser(kind);
+            if(browserPath!=null)detectedResult=new InstallResult{success=true,version=loaded.version,folder=loaded.folder,extensionId=loaded.id,browser=kind,browserPath=browserPath,dashboardUrl="chrome-extension://"+loaded.id+"/dashboard.html",manualConfirmationRequired=false};
+            if(!String.Equals(Setup.NormalizeDir(Path.GetDirectoryName(Path.GetFullPath(loaded.folder))),Setup.NormalizeDir(root),StringComparison.OrdinalIgnoreCase)&&Directory.Exists(Path.GetDirectoryName(loaded.folder))) {
+                applyingResult=true;folder.Text=Path.GetDirectoryName(loaded.folder);applyingResult=false;UpdateLoadPath();
+            }
+            string profileName;try{profileName=Path.GetFileName(loaded.profile);}catch{profileName="当前配置";}
+            string vendor=kind=="edge"?"Edge":"Chrome";
+            status.Text=loaded.enabled
+                ?"检测到校事笺 "+(loaded.version??"")+" 已在"+vendor+"的「"+profileName+"」配置中加载（"+loaded.folder+"）。可直接点“打开工作台”，不必重新安装；重新准备文件仅用于更新或修复。"
+                :"检测到校事笺已在"+vendor+"的「"+profileName+"」配置中加载，但当前处于停用状态。请点“打开扩展管理页”重新开启。";
+            copy.Enabled=manage.Enabled=workbench.Enabled=true;
+            install.Text=loaded.version==Setup.Plan.version?"文件已就绪（重新准备可修复）":"准备安装并打开浏览器（更新文件）";
+        } else if(receipt!=null) {
+            status.Text="检测到此前用助手准备过文件（v"+receipt.version+"，位于 "+receipt.folder+"）。若当前浏览器配置里还没有加载，点“打开扩展管理页”完成首次加载即可，不必重新准备。";
+            copy.Enabled=manage.Enabled=workbench.Enabled=true;
+            detectedResult=new InstallResult{success=true,version=receipt.version,folder=receipt.folder,extensionId=receipt.extensionId,browser=kind,browserPath=receipt.browserPath??Setup.FindBrowser(kind),dashboardUrl=receipt.dashboardUrl,manualConfirmationRequired=true};
+        }
     }
     void UpdateManagementAddress(){managementAddress.Text=(browser.SelectedIndex==0?"edge":"chrome")+"://extensions/";}
     void OpenManagement() {
