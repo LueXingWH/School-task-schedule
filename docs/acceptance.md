@@ -1,6 +1,17 @@
 # 验收记录
 
-验收日期：2026-10-28；当前版本 **1.3.0**。Windows 上实际安装的 **Microsoft Edge 156.0.4314.42** 和 **Google Chrome 154.0.8037.100** 均已验证。没有使用模拟 OCR、模拟附件正文或模拟 IndexedDB。
+验收日期：2026-10-28；当前版本 **1.4.0**。Windows 上实际安装的 **Microsoft Edge 156.0.4314.42** 和 **Google Chrome 156.0.8078.48** 均已验证。没有使用模拟 OCR、模拟附件正文或模拟 IndexedDB。
+
+## 1.4.0 自动提取与紧凑日程验收
+
+- 44 条 Vitest 规则与备份回归通过，生产构建（TypeScript、扩展 ZIP 和 Windows EXE）通过。
+- Chrome 与 Edge 各 15 组核心业务验收、7 组新增识别验收通过；生产 ZIP 在新配置的安装恢复分别通过 5 / 6 项检查，包含 Edge 恢复 Chrome 备份。
+- 新增验证覆盖文字、UTF-8 TXT、真实截图 OCR、文本 PDF、扫描 PDF 的标题/待办/对应时间；11 页扫描 PDF 自动 OCR 前 10 页、明确标记第 11 页并选页继续。
+- 验证右上角“确认日程”、日期/时刻补全、反复确认不重复、完成勾选与重提取保护；40 条待办在固定高度列表中滚动，390px 窄屏无横向溢出，滚动后确认按钮仍可点击。
+- 新待办备份恢复验证日程和来源 ID 重映射；真实导入缺少待办字段的 1.3.0 备份，旧任务与勾选保留，打开后补提取待办。另加回归验证确认日程后修正文前插内容时，截止日保留且备份不会留下失效候选关联。
+- 两个浏览器的核心与识别报告均记录 JS 错误为 0、离线核心 HTTP 请求为 0。生产权限和 CSP 保持不变。
+- 证据：`test-results/{chrome,edge}/browser-results.json`、`recognition/results.json`、`install-results.json`；紧凑布局截图见各浏览器的 `recognition/compact-desktop.png` 和 `compact-mobile.png`。
+- 本轮安装回归使用实际生产 ZIP；Windows EXE 已构建，本轮未重跑安装助手自身的 WinForms 按钮验收，下方 1.3.0 的 EXE 检查为历史记录。
 
 ## 1.3.0 界面与功能优化验收
 

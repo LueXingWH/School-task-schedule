@@ -106,7 +106,7 @@ export function Dashboard({notices,jobs,route}:{notices:Notice[];jobs:ParseJob[]
         <span className="local-badge">本地工作台</span>
       </header>
 
-      {view==='welcome'?<WelcomePanel/>:selected?<Detail notice={selected} jobs={jobs.filter(j=>j.noticeId===selected.id)}/>:view==='notice'?<div className="empty"><span>▧</span><h2>通知已删除或正在载入</h2><p>它可能已在另一个窗口被删除。</p><a href="#all">返回列表</a></div>:view==='import'?<ImportPanel notices={notices} initialNoticeId={route.split('/')[1]}/>:view==='settings'?<SettingsPanel settings={settings} onSettings={s=>{setSettings(s);setSort(s.sort);}}/>:<>
+      {view==='welcome'?<WelcomePanel/>:selected?<Detail key={selected.id} notice={selected} jobs={jobs.filter(j=>j.noticeId===selected.id)}/>:view==='notice'?<div className="empty"><span>▧</span><h2>通知已删除或正在载入</h2><p>它可能已在另一个窗口被删除。</p><a href="#all">返回列表</a></div>:view==='import'?<ImportPanel notices={notices} initialNoticeId={route.split('/')[1]}/>:view==='settings'?<SettingsPanel settings={settings} onSettings={s=>{setSettings(s);setSort(s.sort);}}/>:<>
         {view==='home'&&<>
           <div className="intro-banner">
             <div>

@@ -1,14 +1,14 @@
 # Microsoft Edge 安装、升级与迁移
 
-校事笺 1.3.0 已在 Windows Microsoft Edge **156.0.4314.42** 实际加载验证。使用本机安装的 Edge，测试没有用 Chromium 或 Chrome 代替。核心处理仍在本地，无模型 API、密钥、Python 或服务器。
+校事笺 1.4.0 已在 Windows Microsoft Edge **156.0.4314.42** 实际加载验证。使用本机安装的 Edge，测试没有用 Chromium 或 Chrome 代替。核心处理仍在本地，无模型 API、密钥、Python 或服务器。
 
 ## 第一次安装
 
-推荐双击 `xiaoshijian-1.3.0-setup.exe`，助手自动放置文件、创建入口，并打开新 Edge 窗口。点“复制网址”粘贴到地址栏回车进入扩展管理页；打开左下角的“开发人员模式”开关，点“加载解压缩的扩展”后用“复制扩展路径”在文件夹窗口按 Ctrl+V 粘贴。首次仍在 Edge 确认加载，随后默认设置和欢迎页自动就绪，见 `install-assistant.md`。从旧目录切换请先导出备份。
+推荐双击 `xiaoshijian-1.4.0-setup.exe`，助手自动放置文件、创建入口，并打开新 Edge 窗口。点“复制网址”粘贴到地址栏回车进入扩展管理页；打开左下角的“开发人员模式”开关，点“加载解压缩的扩展”后用“复制扩展路径”在文件夹窗口按 Ctrl+V 粘贴。首次仍在 Edge 确认加载，随后默认设置和欢迎页自动就绪，见 `install-assistant.md`。从旧目录切换请先导出备份。
 
 原 ZIP 手动方式仍保留：
 
-1. 解压 `xiaoshijian-1.3.0-edge.zip` 到固定目录；完整交付包则使用其中的 `extension` 文件夹。
+1. 解压 `xiaoshijian-1.4.0-edge.zip` 到固定目录；完整交付包则使用其中的 `extension` 文件夹。
 2. Edge 地址栏输入 `edge://extensions`。
 3. 开启“开发人员模式”，点击“加载解压缩的扩展”（Load unpacked）。
 4. 选择包含 `manifest.json` 的文件夹。不要选择 ZIP 本身或源码目录。
@@ -36,6 +36,6 @@ Chrome 和 Edge 的数据库分别位于各自的浏览器配置中，不会自�
 - 断网验证了真实中文/英文 OCR、图片上传与 Ctrl+V、文本/扫描/混合 PDF、DOCX 段落表格、本地 Worker/WASM 与 CSP。
 - 验证了跨页面保存、材料/任务、候选及人工修改保护、取消和中断继续、完整备份恢复、新配置安装、整个浏览器重启后保留。
 - Chrome 导出的备份在 Edge 恢复，并核对原文件 SHA-256。详细结果见 `acceptance.md` 和交付包 `evidence/edge`。
-- 本轮实测 Edge 156 与 Chrome 154；更旧版本不作为已验证支持。Linux、macOS、移动端 Edge、企业策略禁止扩展的环境不在本轮验证范围。
+- 本轮实测 Edge 156 与 Chrome 156；更旧版本不作为已验证支持。Linux、macOS、移动端 Edge、企业策略禁止扩展的环境不在本轮验证范围。
 
 安装方式参考微软官方的[本地加载扩展说明](https://learn.microsoft.com/en-us/microsoft-edge/extensions/getting-started/extension-sideloading)。共享 MV3/API 的选择参考[将 Chrome 扩展移植到 Microsoft Edge](https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/port-chrome-extension)，最终支持结论以真实测试为依据。

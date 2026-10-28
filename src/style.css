@@ -774,6 +774,49 @@ footer{
 footer a{color:var(--ink-300)}
 
 /* ---------- 6) 响应式 ---------- */
+.detail-toolbar{position:sticky;top:12px;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;margin-bottom:10px;background:var(--paper)}
+.detail-toolbar .back-link{margin:0}
+.notice-overview{padding:16px 20px}
+.notice-overview label{margin-bottom:10px}
+.deadline-editor{margin-top:10px;font-size:12px}
+.deadline-editor>summary{cursor:pointer;color:var(--brand)}
+.deadline-editor .quick-dates{margin:12px 0 10px}
+.deadline-editor>.row{margin-top:10px}
+.detail-tabs{display:flex;gap:4px;margin:14px 0 0;border-bottom:1px solid var(--line-strong);overflow-x:auto}
+.detail-tabs button{border:0;border-radius:8px 8px 0 0;background:transparent;padding:9px 12px;color:var(--ink-500)}
+.detail-tabs button[aria-selected=true]{background:var(--brand-soft);color:var(--brand-deep);box-shadow:inset 0 -2px var(--brand)}
+.detail-main>[role=tabpanel]{margin-top:12px;padding:18px 20px}
+.bounded-list{max-height:320px;overflow-y:auto;overscroll-behavior-y:contain;scrollbar-gutter:stable}
+.action-section{margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.action-section p,.schedule-panel>p{font-size:12px;margin-bottom:8px}
+.action-section .section-heading{margin-bottom:6px}
+.action-item{padding:9px 0;border-bottom:1px dashed var(--line)}
+.action-item:last-child{border:0}
+.action-main{display:flex;align-items:center;gap:8px}
+.action-main>input:not([type=checkbox]){flex:1;min-width:0;padding:6px 8px;font-size:13px}
+.action-time{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:6px 0 0 26px}
+.action-time input{padding:4px 6px;font-size:12px;width:140px}
+.action-time input[type=time]{width:102px}
+.action-time span{font-size:11px}
+.pending-time{color:var(--amber)}
+.action-evidence{margin:4px 0 0 26px;font-size:11px;color:var(--ink-500)}
+.action-evidence summary{cursor:pointer;overflow-wrap:anywhere}
+.schedule-panel>.bounded-list{max-height:220px}
+.schedule-panel .personal-task{display:grid;grid-template-columns:18px minmax(0,1fr) 138px auto auto;gap:6px}
+.schedule-panel .personal-task>input:not([type=checkbox]){min-width:0;width:100%;padding:6px;font-size:12px}
+.task-add{display:flex;gap:8px;align-items:end;margin-top:12px;flex-wrap:wrap}
+.task-add>label{flex:1;min-width:140px;margin:0}
+.task-add>.row{align-items:end;flex:1}
+.task-add>.row>label{margin:0;min-width:130px;flex:1}
+@media(max-width:760px){
+  .detail-toolbar{top:150px;padding:6px 0}
+  .detail-tabs button{padding:8px 9px;font-size:12px}
+  .bounded-list{max-height:280px}
+  .schedule-panel .personal-task{grid-template-columns:18px minmax(0,1fr) auto}
+  .schedule-panel .personal-task>input[type=date]{grid-column:2}
+  .schedule-panel .personal-task>button{grid-column:3;grid-row:1}
+  .detail-main>[role=tabpanel],.notice-overview{padding:14px}
+}
 @media(max-width:1180px){
   :root{--sidebar-w:212px}
   .workspace{padding:28px 26px 36px}

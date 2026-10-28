@@ -20,8 +20,9 @@ export function ImportPanel({notices,initialNoticeId=''}:{notices:Notice[];initi
         if(['png','jpg','jpeg','webp'].includes(ext||''))kind='image';
         else if(ext==='pdf')kind='pdf';
         else if(ext==='docx')kind='docx';
+        else if(['txt','md'].includes(ext||''))kind='text';
         else if(ext==='doc')throw Error('不支持旧版 .doc。请在 Word/WPS 另存为 .docx 或 PDF。');
-        else throw Error('仅支持 PNG/JPEG/WebP、PDF、DOCX');
+        else throw Error('仅支持 PNG/JPEG/WebP、PDF、DOCX、TXT/Markdown');
         if(file.size>(kind==='image'?LIMITS.imageBytes:LIMITS.fileBytes))throw Error(kind==='image'?'图片不能超过 10 MB':'单个附件不能超过 20 MB');
         const result=await addSource({kind,name:file.name,file,noticeId:attachTo||undefined});
         last=result.noticeId;
@@ -75,11 +76,11 @@ export function ImportPanel({notices,initialNoticeId=''}:{notices:Notice[];initi
       >
         <span>↑</span>
         <strong>选择文件，或拖到这里</strong>
-        <small>PNG / JPEG / WebP · PDF · DOCX</small>
-        <input aria-label="导入文件" type="file" accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.doc" multiple disabled={busy} onChange={e=>{void fileImport(Array.from(e.target.files||[]));e.target.value='';}}/>
+        <small>PNG / JPEG / WebP · PDF · DOCX · TXT / Markdown</small>
+        <input aria-label="导入文件" type="file" accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.doc,.txt,.md" multiple disabled={busy} onChange={e=>{void fileImport(Array.from(e.target.files||[]));e.target.value='';}}/>
       </label>
-      <div className="hint"><b>也可以直接粘贴截图</b><p>在此页面按 Ctrl+V；浏览器只在你主动粘贴时接收图片。</p></div>
-      <p className="muted">图片 ≤ 10 MB / 2500 万像素；附件 ≤ 20 MB；PDF ≤ 100 页，扫描 OCR 每批 ≤ 10 页。加密 PDF 请先解密导出。</p>
+      <div className="hint"><b>自动提取标题、待办与时间</b><p>也可按 Ctrl+V 粘贴截图。识别后核对待办，点右上角“确认日程”。</p></div>
+      <p className="muted">图片 ≤ 10 MB / 2500 万像素；附件 ≤ 20 MB；PDF ≤ 100 页，自动 OCR 前 10 个扫描页，剩余页可选页继续。加密 PDF 请先解密导出。</p>
 
       {recent.length>0&&<>
         <h4 style={{marginTop:18}}>继续处理最近的通知</h4>

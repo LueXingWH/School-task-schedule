@@ -1,6 +1,6 @@
 {
   "name": "xiaoshijian",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,6 +9,7 @@
     "build": "npm run assets && tsc --noEmit && vite build && node scripts/package.mjs && node scripts/build-installer.mjs",
     "test": "vitest run",
     "test:e2e": "node tests/browser.mjs",
+    "test:recognition": "node tests/recognition.mjs",
     "fixtures": "node tests/fixtures.mjs",
     "test:install": "node tests/install.mjs",
     "test:public": "node tests/public-web.mjs",

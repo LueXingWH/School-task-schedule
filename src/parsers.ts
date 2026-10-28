@@ -31,7 +31,7 @@ export async function ocrImage(image:HTMLCanvasElement,signal:AbortSignal,progre
 }
 export function pdfLines(items:unknown[]):string {
   const lines:{y:number;x:number;text:string}[]=[];
-  for(const raw of items) {const t=raw as {str?:string;transform?:number[];hasEOL?:boolean};if(!t.str||!t.transform)continue;const x=t.transform[4],y=t.transform[5];let line=lines.find(l=>Math.abs(l.y-y)<3);if(!line){line={x,y,text:''};lines.push(line);}line.text+=t.str+' ';}
+  for(const raw of items) {const t=raw as {str?:string;transform?:number[];hasEOL?:boolean};if(!t.str||!t.transform)continue;const x=t.transform[4],y=t.transform[5];let line=lines.find(l=>Math.abs(l.y-y)<3);if(!line){line={x,y,text:''};lines.push(line);}const join=/[\u4e00-\u9fff，。；：、（【]$/.test(line.text)||/^[\u4e00-\u9fff，。；：、）】]/.test(t.str);line.text+=(line.text&&!join?' ':'')+t.str;}
   return lines.sort((a,b)=>b.y-a.y||a.x-b.x).map(l=>l.text.trim()).join('\n');
 }
 export async function pdfText(blob:Blob,source:Source,selected:number[]|undefined,signal:AbortSignal,progress:(s:string)=>void,onPages:(pages:PageText[])=>Promise<void>) {
@@ -44,21 +44,30 @@ export async function pdfText(blob:Blob,source:Source,selected:number[]|undefine
     if(selected&&(selected.length>LIMITS.ocrPages||selected.some(n=>!Number.isInteger(n)||n<1||n>pdf.numPages)))throw Error('OCR 页码无效或单批超过 10 页');
     const pages:PageText[]=source.pages?structuredClone(source.pages):[];
     const targets=selected||Array.from({length:pdf.numPages},(_,i)=>i+1);
+    let autoOCR=0;
     for(const number of targets) {
       check(signal);progress(`${selected?'扫描 OCR':'读取 PDF'} · 第 ${number}/${pdf.numPages} 页`);
       const page=await pdf.getPage(number);let item:PageText={page:number,text:'',method:'scan'};
       try {
-        if(selected) {
+        if(!selected) {
+          const content=await page.getTextContent();const text=normalize(pdfLines(content.items));
+          item={page:number,text,method:text.replace(/\s/g,'').length>=3?'text':'scan'};
+          const previous=pages.find(p=>p.page===number&&p.method==='ocr'&&p.text.trim()&&!p.error);
+          if(item.method==='scan'&&previous)item={...previous};
+        }
+        if(selected||item.method==='scan'&&autoOCR<LIMITS.ocrPages) {
+          if(!selected)autoOCR++;
+          progress(`扫描 OCR · 第 ${number}/${pdf.numPages} 页`);
           let viewport=page.getViewport({scale:2});if(viewport.width*viewport.height>LIMITS.pixels)throw Error('渲染页尺寸过大，请缩小原 PDF');
           const canvas=document.createElement('canvas');canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
-          try {await page.render({canvas,viewport}).promise;item={page:number,text:await ocrImage(canvas,signal,s=>progress(`第 ${number} 页 · ${s}`)),method:'ocr'};}finally{canvas.width=canvas.height=0;}
-        }else {const content=await page.getTextContent();const text=normalize(pdfLines(content.items));item={page:number,text,method:text.replace(/\s/g,'').length>=3?'text':'scan'};}
+          try {await page.render({canvas,viewport}).promise;const text=await ocrImage(canvas,signal,s=>progress(`第 ${number} 页 · ${s}`));item={page:number,text,method:'ocr',...(!text?{error:'未识别出正文，请核对原件或换清晰文件'}:{})};}finally{canvas.width=canvas.height=0;}
+        }
       }catch(e){check(signal);item.error=e instanceof Error?e.message:String(e);}finally{page.cleanup();}
       const i=pages.findIndex(p=>p.page===number);if(i>=0)pages[i]=item;else pages.push(item);pages.sort((a,b)=>a.page-b.page);
       if(pages.reduce((len,p)=>len+p.text.length,0)>LIMITS.textChars)throw Error('PDF 正文过长，请拆分');
       await onPages(pages);
     }
-    return {text:joinPages(pages),pages,warnings:pages.filter(p=>p.method==='scan'||p.error).map(p=>`第 ${p.page} 页${p.error?'读取失败：'+p.error:'无有效文本，请选择扫描 OCR'}`)};
+    return {text:joinPages(pages),pages,warnings:pages.filter(p=>p.method==='scan'||p.error).map(p=>`第 ${p.page} 页${p.error?'读取失败：'+p.error:'未识别：自动 OCR 每批最多 10 页，请选择剩余扫描页继续'}`)};
   }finally{signal.removeEventListener('abort',abort);await loading.destroy();}
 }
 export const joinPages=(pages:PageText[])=>pages.map(p=>`【第${p.page}页】\n${p.text}`).join('\n\n');

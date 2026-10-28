@@ -1,7 +1,7 @@
 import { db, change } from './db';
 import { derive } from './rules';
 import { docxText, imageCanvas, ocrImage, pdfText, joinPages } from './parsers';
-import { type ParseJob } from './model';
+import { LIMITS,normalize,type ParseJob } from './model';
 import { liveQuery } from 'dexie';
 const running=new Map<string,AbortController>();
 export function cancelJob(id:string){running.get(id)?.abort();void db.jobs.update(id,{state:'cancelled',progress:'已取消，原始输入仍保留',updatedAt:Date.now()});}
@@ -20,6 +20,7 @@ export async function runJob(jobId:string) {
       const attachment=source.attachmentId?await db.attachments.get(source.attachmentId):undefined;
       let result:{text:string;warnings?:string[];pages?:typeof source.pages}={text:source.text};
       if(attachment) {
+        if(source.kind==='text') {result.text=normalize(await attachment.blob.text());if(result.text.includes('\uFFFD'))throw Error('文字编码无法识别，请另存为 UTF-8 后重试');if(result.text.length>LIMITS.textChars)throw Error('文字超过一百万字符，请分批导入');}
         if(source.kind==='image') {const canvas=await imageCanvas(attachment.blob,source.rotation);try{result.text=await ocrImage(canvas,ctl.signal,progress);}finally{canvas.width=canvas.height=0;}}
         else if(source.kind==='docx'){progress('读取 DOCX 段落与表格');result=await docxText(attachment.blob,ctl.signal);}
         else if(source.kind==='pdf')result=await pdfText(attachment.blob,source,job.pages,ctl.signal,progress,async pages=>{
