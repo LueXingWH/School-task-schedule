@@ -1,7 +1,7 @@
 import {chromium} from 'playwright';
 import {spawn,execSync} from 'node:child_process';
 import path from 'node:path';
-import {existsSync} from 'node:fs';
+import {existsSync,readdirSync,rmSync,statSync} from 'node:fs';
 import {readFile} from 'node:fs/promises';
 
 export const channel=process.env.TEST_BROWSER||'chrome';
@@ -10,7 +10,18 @@ export const browserName=channel==='msedge'?'Microsoft Edge':'Google Chrome';
 export const browserSlug=channel==='msedge'?'edge':'chrome';
 export const outputDir=`test-results/${browserSlug}`;
 export const versionPage=channel==='msedge'?'edge://version':'chrome://version';
+// 每轮测试都会新建 .test-profile-*（Chromium/Edge 用户配置，几十 MB），泄漏会累积到数 GB。
+// 启动时清扫超过 24h 的旧 profile：足够老即不可能有并发测试会话仍在使用。
+export function cleanupStaleProfiles(maxAgeMs=24*60*60*1000) {
+  const cutoff=Date.now()-maxAgeMs;let removed=0;
+  try{for(const name of readdirSync('.')){
+    if(!name.startsWith('.test-profile-'))continue;
+    try{if(statSync(name).mtimeMs>cutoff)continue;rmSync(name,{recursive:true,force:true});removed++;}catch{}
+  }}catch{}
+  return removed;
+}
 export async function launchBrowser(profile,extra={}) {
+  cleanupStaleProfiles();
   return chromium.launchPersistentContext(profile,{channel,headless:true,ignoreDefaultArgs:['--disable-extensions'],args:['--enable-unsafe-extension-debugging'],...extra});
 }
 export function browserExecutable() {
@@ -24,6 +35,7 @@ let attachedPort=9800;
 // 直接 spawn 浏览器并用 CDP 附加，贴近安装助手面对的真实形态（外部进程交接对新窗口的处理
 // 在 Playwright launchPersistentContext 托管的实例上不可见，见 test-results/exp 调试记录）。
 export async function launchAttachedBrowser(profile) {
+  cleanupStaleProfiles();
   // 本地 CDP 调试端口绝不能走系统/环境代理：沙箱注入的 HTTPS_PROXY 会把 127.0.0.1 请求
 // 转发到外部代理并返回 502。仅在附加启动这条链路里清理。
   for(const key of ['HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','http_proxy','https_proxy','all_proxy'])delete process.env[key];

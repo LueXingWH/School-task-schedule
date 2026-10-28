@@ -1,6 +1,7 @@
 import {launchBrowser,loadExtension,browserName,browserSlug,outputDir} from './browser-support.mjs';
 import {unzipSync,zipSync,strToU8,strFromU8} from 'fflate';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {rmSync} from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 const {version}=JSON.parse(await readFile('package.json','utf8'));
@@ -30,4 +31,4 @@ try {
     assert.deepEqual(hashes.sort(),chromeInfo.attachments.map(a=>a.sha256).sort());results.push('Chrome 完整备份可在 Edge 恢复，通知/清单/任务与原文件 SHA-256 均保留');
   }
   console.log(results.join('\n'));
-}catch(e){process.exitCode=1;results.push('FAIL '+e);console.error(e);}finally{await writeFile(`${outputDir}/install-results.json`,JSON.stringify({date:new Date().toISOString(),browser:browserName,browserVersion:runtime?.browserVersion,extensionVersion:runtime?.extensionVersion,results},null,2));await context?.close();}
+}catch(e){process.exitCode=1;results.push('FAIL '+e);console.error(e);}finally{await writeFile(`${outputDir}/install-results.json`,JSON.stringify({date:new Date().toISOString(),browser:browserName,browserVersion:runtime?.browserVersion,extensionVersion:runtime?.extensionVersion,results},null,2));await context?.close();try{rmSync(profile,{recursive:true,force:true});}catch{}}

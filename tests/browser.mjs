@@ -1,6 +1,7 @@
 import {launchBrowser,loadExtension,connectPopup,browserName,outputDir,versionPage} from './browser-support.mjs';
 import assert from 'node:assert/strict';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
+import {rmSync} from 'node:fs';
 import path from 'node:path';
 import {createServer} from 'node:http';
 const results=[];const errors=[];const requests=[];const stamp=Date.now();const out=outputDir;await mkdir(out,{recursive:true});
@@ -48,4 +49,4 @@ try {
   await record('窄窗口布局与首页真实数据截图',async()=>{await page.goto(`${base}/dashboard.html#home`);await page.screenshot({path:`${out}/dashboard.png`,fullPage:true});await page.setViewportSize({width:390,height:844});await page.screenshot({path:`${out}/mobile.png`,fullPage:true});const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1);assert(!overflow,'Narrow viewport overflow');});
   await writeFile(out+'/data-snapshot.json',JSON.stringify((await readDB()).notices,null,2));
   const genuineErrors=errors.filter(e=>!e.includes('Invalid PDF structure')&&!e.includes('InvalidPDFException'));assert.deepEqual(genuineErrors,[],'Unexpected browser JS/CSP error');
-} catch(e){process.exitCode=1;console.error(e);} finally {if(server)server.close();await writeFile(`${out}/browser-results.json`,JSON.stringify({date:new Date().toISOString(),browser:runtime.browser,browserVersion:runtime.browserVersion,extensionVersion:runtime.extensionVersion,userAgent:runtime.userAgent,results,errors,offlineHTTPRequests:requests},null,2));await context.close();}
+} catch(e){process.exitCode=1;console.error(e);} finally {if(server)server.close();await writeFile(`${out}/browser-results.json`,JSON.stringify({date:new Date().toISOString(),browser:runtime.browser,browserVersion:runtime.browserVersion,extensionVersion:runtime.extensionVersion,userAgent:runtime.userAgent,results,errors,offlineHTTPRequests:requests},null,2));await context.close();try{rmSync(`.test-profile-${browserName.replaceAll(' ','-')}-${stamp}`,{recursive:true,force:true});}catch{}}
