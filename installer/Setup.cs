@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -20,6 +21,92 @@ internal class InstallResult {
     public bool manualConfirmationRequired = true; public bool shortcutCreated; public string warning; public string error;
 }
 internal class DetectedInstall { public string id; public string profile; public string folder; public string version; public bool enabled; }
+
+// ---------- 视觉令牌：与扩展工作台同一套墨绿 / 纸白配色 ----------
+internal static class Palette {
+    internal static readonly Color Bg = Color.FromArgb(246,248,242);
+    internal static readonly Color Card = Color.White;
+    internal static readonly Color Line = Color.FromArgb(228,233,224);
+    internal static readonly Color LineStrong = Color.FromArgb(211,218,208);
+    internal static readonly Color Brand = Color.FromArgb(23,111,98);
+    internal static readonly Color BrandDeep = Color.FromArgb(15,90,79);
+    internal static readonly Color BrandSoft = Color.FromArgb(232,242,238);
+    internal static readonly Color Ink = Color.FromArgb(24,39,34);
+    internal static readonly Color InkMid = Color.FromArgb(49,69,61);
+    internal static readonly Color Muted = Color.FromArgb(92,111,102);
+    internal static readonly Color Faint = Color.FromArgb(139,154,146);
+    internal static readonly Color Amber = Color.FromArgb(169,106,18);
+    internal static readonly Color Red = Color.FromArgb(173,58,43);
+    internal static readonly Color HeaderFrom = Color.FromArgb(236,245,239);
+    internal static readonly Color HeaderTo = Color.FromArgb(250,251,246);
+}
+
+internal static class Round {
+    internal static GraphicsPath Create(Rectangle r, int radius) {
+        var path = new GraphicsPath();
+        int d = radius * 2;
+        if(d>r.Width)d=r.Width; if(d>r.Height)d=r.Height;
+        path.AddArc(r.X, r.Y, d, d, 180, 90);
+        path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+        path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+        path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+        path.CloseFigure();
+        return path;
+    }
+}
+
+// 圆角白卡：WinForms 原生控件没有圆角，这里自绘底板，子控件照常摆放。
+internal class Card : Panel {
+    public Card() { DoubleBuffered = true; BackColor = Palette.Bg; }
+    protected override void OnPaint(PaintEventArgs e) {
+        base.OnPaint(e);
+        var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
+        var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+        using(var path = Round.Create(rect, 12)) {
+            using(var fill = new SolidBrush(Palette.Card)) g.FillPath(fill, path);
+            using(var pen = new Pen(Palette.Line)) g.DrawPath(pen, path);
+        }
+    }
+}
+
+// 顶部品牌带：浅绿渐变 + 圆角 Logo + 标题，不依赖图标资源。
+internal class HeaderBand : Panel {
+    readonly string version;
+    public HeaderBand(string version) { this.version = version; DoubleBuffered = true; BackColor = Palette.HeaderFrom; }
+    protected override void OnPaint(PaintEventArgs e) {
+        var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
+        using(var brush = new LinearGradientBrush(ClientRectangle, Palette.HeaderFrom, Palette.HeaderTo, 20f))
+            g.FillRectangle(brush, ClientRectangle);
+        using(var pen = new Pen(Palette.Line)) g.DrawLine(pen, 0, Height - 1, Width, Height - 1);
+        var logo = new Rectangle(24, 24, 44, 44);
+        using(var path = Round.Create(logo, 13)) {
+            using(var fill = new SolidBrush(Palette.Brand)) g.FillPath(fill, path);
+        }
+        using(var glyph = new Font("Microsoft YaHei UI", 15f, FontStyle.Bold))
+            TextRenderer.DrawText(g, "校", glyph, logo, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        using(var title = new Font("Microsoft YaHei UI", 15f, FontStyle.Bold))
+            TextRenderer.DrawText(g, "校事笺 · 便捷安装助手", title, new Point(82, 26), Palette.Ink);
+        using(var sub = new Font("Microsoft YaHei UI", 9f))
+            TextRenderer.DrawText(g, "把校园通知收进本地工作台，文件准备只需一步", sub, new Point(83, 56), Palette.Muted);
+        using(var ver = new Font("Microsoft YaHei UI", 8.5f))
+            TextRenderer.DrawText(g, "v" + version, ver, new Rectangle(Width - 130, 34, 106, 20), Palette.Faint, TextFormatFlags.Right);
+    }
+}
+
+// 步骤序号：圆形底 + 数字。
+internal class StepBadge : Control {
+    public StepBadge(string number) {
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
+        Text = number; Size = new Size(20, 20);
+    }
+    protected override void OnPaint(PaintEventArgs e) {
+        var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
+        using(var b = new SolidBrush(Palette.BrandSoft)) g.FillEllipse(b, 0, 0, Width - 1, Height - 1);
+        using(var f = new Font("Microsoft YaHei UI", 8f, FontStyle.Bold))
+            TextRenderer.DrawText(g, Text, f, ClientRectangle, Palette.BrandDeep, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+    }
+}
+
 internal static class Setup {
     internal static readonly JavaScriptSerializer Json = CreateJson();
     static JavaScriptSerializer CreateJson(){var serializer=new JavaScriptSerializer();serializer.MaxJsonLength=int.MaxValue;return serializer;}
@@ -210,37 +297,191 @@ internal static class Setup {
 }
 
 internal class SetupWindow:Form {
-    readonly ComboBox browser=new ComboBox();readonly Button install=new Button(),browse=new Button(),copy=new Button(),manage=new Button(),workbench=new Button(),urlCopy=new Button();readonly TextBox folder=new TextBox(),managementAddress=new TextBox(),loadPath=new TextBox();readonly Label status=new Label(),detectLabel=new Label();readonly string shortcutsOverride,testProfile;readonly bool noOpen;InstallResult installed,detectedResult;DetectedInstall detected;bool preparing,applyingResult,managementOpened;readonly Timer detectDebounce=new Timer();
+    const int CardX = 24, CardW = 732;
+    readonly ComboBox browser=new ComboBox();
+    readonly Button install=new Button(),browse=new Button(),copy=new Button(),manage=new Button(),workbench=new Button(),urlCopy=new Button();
+    readonly TextBox folder=new TextBox(),managementAddress=new TextBox(),loadPath=new TextBox();
+    readonly Label status=new Label(),detectLabel=new Label(),detectHint=new Label();
+    readonly ProgressBar progress=new ProgressBar();
+    readonly string shortcutsOverride,testProfile;
+    readonly bool noOpen;
+    InstallResult installed,detectedResult;DetectedInstall detected;
+    bool preparing,applyingResult,managementOpened;
+    readonly Timer detectDebounce=new Timer();
     internal event Action<InstallResult> Completed;
+
     public SetupWindow(string initialRoot=null,string shortcutsDir=null,bool skipBrowserLaunch=false,string browserTestProfile=null) {
         shortcutsOverride=shortcutsDir;noOpen=skipBrowserLaunch;testProfile=browserTestProfile;
-        Text="校事笺 · 便捷安装助手 "+Setup.Plan.version;Size=new Size(700,720);MinimumSize=Size;MaximumSize=Size;StartPosition=FormStartPosition.CenterScreen;Font=new Font("Microsoft YaHei UI",10);BackColor=Color.FromArgb(246,248,242);AutoScaleMode=AutoScaleMode.Dpi;MaximizeBox=false;
-        var title=new Label {Text="收好通知，安装也轻一点",Font=new Font(Font.FontFamily,21,FontStyle.Bold),ForeColor=Color.FromArgb(23,111,98),Location=new Point(30,26),AutoSize=true};Controls.Add(title);
-        AddLabel("已装过的自动识别 · 自动放置资源 · 创建桌面入口",30,82,630,30);
-        AddLabel("本助手准备本地文件。首次仍需在浏览器中开启开发人员模式并确认加载。",30,121,630,42);
-        browser.SetBounds(30,174,260,36);browser.DropDownStyle=ComboBoxStyle.DropDownList;browser.Items.AddRange(new object[]{"Microsoft Edge（推荐）","Google Chrome"});browser.SelectedIndex=Setup.FindBrowser("edge")!=null?0:1;Controls.Add(browser);
-        install.Text="准备安装并打开浏览器";install.SetBounds(315,169,330,43);install.BackColor=Color.FromArgb(23,111,98);install.ForeColor=Color.White;install.FlatStyle=FlatStyle.Flat;install.Click+=InstallClick;Controls.Add(install);
-        AddLabel("安装位置（可直接修改，也可点击浏览选择）",30,230,615,24);
-        folder.SetBounds(30,258,500,28);folder.ReadOnly=false;folder.Text=initialRoot??Setup.DefaultRoot;Controls.Add(folder);
-        browse.Text="浏览…";browse.SetBounds(545,254,100,35);browse.Click+=BrowseClick;Controls.Add(browse);
-        loadPath.SetBounds(30,299,615,28);loadPath.ReadOnly=true;loadPath.BorderStyle=BorderStyle.None;loadPath.BackColor=BackColor;loadPath.ForeColor=Color.FromArgb(87,112,84);Controls.Add(loadPath);
-        folder.TextChanged+=delegate {UpdateLoadPath();if(!preparing&&!applyingResult){installed=null;copy.Enabled=workbench.Enabled=false;install.Enabled=true;install.Text="准备安装并打开浏览器";}ScheduleDetection();};UpdateLoadPath();
-        copy.Text="复制扩展路径";copy.SetBounds(30,353,170,36);copy.Enabled=false;copy.Click+=delegate {var target=installed??detectedResult;if(target==null||String.IsNullOrEmpty(target.folder)){status.Text="请先准备安装，或确认扩展目录存在。";return;}try{Clipboard.SetText(target.folder);status.Text="扩展路径已复制（这是你主动复制的，其余时候助手不动剪贴板）。在“加载解压缩的扩展”的文件夹窗口按 Ctrl+V，然后点“选择文件夹”。";}catch{status.Text="暂时无法访问剪贴板，请在上方路径框选中扩展路径后按 Ctrl+C。";}};Controls.Add(copy);
-        manage.Text="打开扩展管理页";manage.SetBounds(215,353,205,36);manage.Click+=delegate {OpenManagement();};Controls.Add(manage);
-        workbench.Text="如何打开工作台";workbench.SetBounds(435,353,210,36);workbench.Enabled=false;workbench.Click+=delegate {
-            string prefix=detected!=null?"校事笺加载在「"+ProfileName(detected.profile)+"」配置，请在该配置下打开。":"";
-            status.Text=prefix+"打开工作台任选其一：① 双击桌面“校事笺”快捷方式；② 点浏览器工具栏右上角的校事笺图标；③ 在扩展管理页点校事笺的“详细信息”，里面有工作台链接。若浏览器显示无法访问：当前打开的不是加载校事笺的那个用户配置，切换配置后再试（ Edge 右上角头像可切换）。";
-        };Controls.Add(workbench);
-        AddLabel("管理页网址",30,408,105,28);managementAddress.SetBounds(140,405,395,28);managementAddress.ReadOnly=true;Controls.Add(managementAddress);
-        urlCopy.Text="复制网址";urlCopy.SetBounds(545,403,100,32);urlCopy.FlatStyle=FlatStyle.Flat;urlCopy.Click+=delegate {try{Clipboard.SetText(managementAddress.Text);status.Text="管理页网址已复制（这是你主动复制的）。到浏览器地址栏按 Ctrl+V、回车进入扩展管理页。";}catch{status.Text="暂时无法访问剪贴板，请在上方网址框选中管理页网址后按 Ctrl+C。";}};Controls.Add(urlCopy);
-        browser.SelectedIndexChanged+=delegate {UpdateManagementAddress();ScheduleDetection();};UpdateManagementAddress();
-        AddLabel("① 点“复制网址”，粘贴到浏览器地址栏并回车，进入扩展管理页。\r\n② 先打开“开发人员模式”开关：Edge 在页面左下角，Chrome 在页面右上角（容易漏看）。\r\n③ 点“加载解压缩的扩展”，点“复制扩展路径”后在文件夹窗口按 Ctrl+V 粘贴，再“选择文件夹”。\r\n④ 加载完成，校事笺自动打开工作台；以后从桌面“校事笺”进入。",30,443,615,94);
-        status.SetBounds(30,543,615,62);status.Text="点“复制网址”粘贴到浏览器地址栏进入扩展管理页；点“准备安装”准备文件并创建桌面入口。助手只在你点复制按钮时才写剪贴板。";status.ForeColor=Color.FromArgb(87,112,84);Controls.Add(status);
-        detectLabel.SetBounds(30,611,615,26);detectLabel.ForeColor=Color.FromArgb(87,112,84);detectLabel.Font=new Font(Font.FontFamily,10,FontStyle.Bold);Controls.Add(detectLabel);
-        AddLabel("更换安装位置会改变本地扩展 ID。已有数据请先导出备份，再在新工作台恢复。",30,643,615,44);
+        Text="校事笺 · 便捷安装助手 "+Setup.Plan.version;
+        ClientSize=new Size(780,816);MinimumSize=new Size(720,700);
+        StartPosition=FormStartPosition.CenterScreen;Font=new Font("Microsoft YaHei UI",9.5f);
+        BackColor=Palette.Bg;AutoScaleMode=AutoScaleMode.Dpi;MaximizeBox=false;AutoScroll=true;
+
+        BuildHeader();
+        BuildLocationCard(initialRoot);
+        BuildPrimaryAction();
+        BuildStepsCard();
+        BuildDetectCard();
+        BuildStatusArea();
+
         FormClosing+=delegate(object sender,FormClosingEventArgs e){if(preparing){e.Cancel=true;status.Text="正在校验和放置文件，请稍候完成后再关闭。";}};
         if(testProfile==null){detectDebounce.Interval=600;detectDebounce.Tick+=delegate{RunDetection();};ScheduleDetection();}
     }
+
+    // ---------- 布局 ----------
+    void BuildHeader() {
+        var header=new HeaderBand(Setup.Plan.version){Location=new Point(0,0),Size=new Size(780,96)};
+        header.Anchor=AnchorStyles.Top|AnchorStyles.Left|AnchorStyles.Right;
+        Controls.Add(header);
+    }
+
+    void BuildLocationCard(string initialRoot) {
+        var card=new Card{Location=new Point(CardX,108),Size=new Size(CardW,196)};
+        card.Anchor=AnchorStyles.Top|AnchorStyles.Left|AnchorStyles.Right;
+        Controls.Add(card);
+
+        Heading(card,"1","浏览器与安装位置","助手只准备本地文件");
+        AddText(card,"浏览器",18,56,60,22,8.5f,Palette.Muted);
+        browser.SetBounds(84,52,220,30);browser.DropDownStyle=ComboBoxStyle.DropDownList;
+        browser.Items.AddRange(new object[]{"Microsoft Edge（推荐）","Google Chrome"});
+        browser.SelectedIndex=Setup.FindBrowser("edge")!=null?0:1;
+        card.Controls.Add(browser);
+        AddText(card,"已装过的会自动识别，不必重复准备",312,58,380,22,8.5f,Palette.Faint);
+
+        AddText(card,"安装位置",18,100,60,22,8.5f,Palette.Muted);
+        folder.SetBounds(84,96,536,30);folder.ReadOnly=false;folder.Text=initialRoot??Setup.DefaultRoot;
+        card.Controls.Add(folder);
+        browse.Text="浏览…";browse.SetBounds(632,94,82,34);browse.Click+=BrowseClick;card.Controls.Add(browse);
+
+        loadPath.SetBounds(84,134,630,20);loadPath.ReadOnly=true;loadPath.BorderStyle=BorderStyle.None;
+        loadPath.BackColor=Palette.Card;loadPath.ForeColor=Palette.Faint;loadPath.Font=new Font(Font.FontFamily,8.5f);
+        card.Controls.Add(loadPath);
+
+        AddText(card,"更换安装位置会改变本地扩展 ID；已有数据请先导出备份。",18,162,690,22,8.5f,Palette.Faint);
+
+        folder.TextChanged+=delegate {UpdateLoadPath();if(!preparing&&!applyingResult){installed=null;copy.Enabled=workbench.Enabled=false;install.Enabled=true;install.Text="准备安装并打开浏览器";}ScheduleDetection();};
+        UpdateLoadPath();
+    }
+
+    void BuildPrimaryAction() {
+        install.Text="准备安装并打开浏览器";
+        install.SetBounds(CardX,318,CardW,46);
+        install.Anchor=AnchorStyles.Top|AnchorStyles.Left|AnchorStyles.Right;
+        install.BackColor=Palette.Brand;install.ForeColor=Color.White;
+        install.FlatStyle=FlatStyle.Flat;install.FlatAppearance.BorderSize=0;
+        install.Font=new Font(Font.FontFamily,10.5f,FontStyle.Bold);
+        install.Cursor=Cursors.Hand;
+        install.Click+=InstallClick;
+        Controls.Add(install);
+
+        progress.SetBounds(CardX,372,CardW,6);
+        progress.Anchor=AnchorStyles.Top|AnchorStyles.Left|AnchorStyles.Right;
+        progress.Style=ProgressBarStyle.Marquee;progress.MarqueeAnimationSpeed=28;progress.Visible=false;
+        Controls.Add(progress);
+    }
+
+    void BuildStepsCard() {
+        var card=new Card{Location=new Point(CardX,386),Size=new Size(CardW,240)};
+        card.Anchor=AnchorStyles.Top|AnchorStyles.Left|AnchorStyles.Right;
+        Controls.Add(card);
+
+        Heading(card,"2","在浏览器里完成首次加载","只需一次");
+
+        Step(card,18,44,"1","打开扩展管理页","点“复制网址”，粘贴到地址栏并回车");
+        Step(card,380,44,"2","开启开发人员模式","Edge 在左下角，Chrome 在右上角");
+        Step(card,18,98,"3","点“加载解压缩的扩展”","点“复制扩展路径”，在文件夹窗口 Ctrl+V");
+        Step(card,380,98,"4","完成，打开工作台","加载后自动打开，桌面入口可直达");
+
+        managementAddress.SetBounds(18,148,392,30);managementAddress.ReadOnly=true;
+        card.Controls.Add(managementAddress);
+
+        urlCopy.Text="复制网址";urlCopy.SetBounds(420,146,86,34);urlCopy.FlatStyle=FlatStyle.Flat;
+        urlCopy.FlatAppearance.BorderColor=Palette.LineStrong;
+        urlCopy.Click+=delegate {try{Clipboard.SetText(managementAddress.Text);status.Text="管理页网址已复制（这是你主动复制的）。到浏览器地址栏按 Ctrl+V、回车进入扩展管理页。";}catch{status.Text="暂时无法访问剪贴板，请在上方网址框选中管理页网址后按 Ctrl+C。";}};
+        card.Controls.Add(urlCopy);
+
+        manage.Text="打开扩展管理页";manage.SetBounds(516,146,198,34);manage.FlatStyle=FlatStyle.Flat;
+        manage.FlatAppearance.BorderColor=Palette.LineStrong;
+        manage.Click+=delegate {OpenManagement();};
+        card.Controls.Add(manage);
+
+        copy.Text="复制扩展路径";copy.SetBounds(18,186,150,32);copy.Enabled=false;copy.FlatStyle=FlatStyle.Flat;
+        copy.FlatAppearance.BorderColor=Palette.LineStrong;
+        copy.Click+=delegate {
+            var target=installed??detectedResult;
+            if(target==null||String.IsNullOrEmpty(target.folder)){status.Text="请先准备安装，或确认扩展目录存在。";return;}
+            try{Clipboard.SetText(target.folder);status.Text="扩展路径已复制（这是你主动复制的，其余时候助手不动剪贴板）。在“加载解压缩的扩展”的文件夹窗口按 Ctrl+V，然后点“选择文件夹”。";}
+            catch{status.Text="暂时无法访问剪贴板，请在上方路径框选中扩展路径后按 Ctrl+C。";}
+        };
+        card.Controls.Add(copy);
+
+        workbench.Text="如何打开工作台";workbench.SetBounds(178,186,150,32);workbench.Enabled=false;workbench.FlatStyle=FlatStyle.Flat;
+        workbench.FlatAppearance.BorderColor=Palette.LineStrong;
+        workbench.Click+=delegate {
+            string prefix=detected!=null?"校事笺加载在「"+ProfileName(detected.profile)+"」配置，请在该配置下打开。":"";
+            status.Text=prefix+"打开工作台任选其一：① 双击桌面“校事笺”快捷方式；② 点浏览器工具栏右上角的校事笺图标；③ 在扩展管理页点校事笺的“详细信息”，里面有工作台链接。若浏览器显示无法访问：当前打开的不是加载校事笺的那个用户配置，切换配置后再试（Edge 右上角头像可切换）。";
+        };
+        card.Controls.Add(workbench);
+
+        browser.SelectedIndexChanged+=delegate {UpdateManagementAddress();ScheduleDetection();};
+        UpdateManagementAddress();
+    }
+
+    void BuildDetectCard() {
+        var card=new Card{Location=new Point(CardX,640),Size=new Size(CardW,86)};
+        card.Anchor=AnchorStyles.Top|AnchorStyles.Left|AnchorStyles.Right;
+        Controls.Add(card);
+
+        detectLabel.SetBounds(18,16,690,24);detectLabel.Font=new Font(Font.FontFamily,9.5f,FontStyle.Bold);
+        detectLabel.ForeColor=Palette.InkMid;detectLabel.BackColor=Palette.Card;
+        detectLabel.Text="检测结果：正在检查本机浏览器配置…";
+        card.Controls.Add(detectLabel);
+
+        detectHint.SetBounds(18,44,690,32);detectHint.Font=new Font(Font.FontFamily,8.5f);
+        detectHint.ForeColor=Palette.Faint;detectHint.BackColor=Palette.Card;
+        detectHint.Text="助手只读取浏览器配置判断是否已加载，不会改动浏览器设置，也不会上传任何内容。";
+        card.Controls.Add(detectHint);
+    }
+
+    void BuildStatusArea() {
+        status.SetBounds(CardX,736,CardW,44);status.AutoSize=false;
+        status.Font=new Font(Font.FontFamily,8.5f);status.ForeColor=Palette.Muted;
+        status.BackColor=Palette.Bg;
+        status.Text="点“准备安装并打开浏览器”准备文件并创建桌面入口；助手只在你点复制按钮时才写剪贴板。";
+        Controls.Add(status);
+
+        var foot=new Label{Text="本地处理 · 无需管理员权限 · 首次加载仍需你在浏览器确认",AutoSize=false};
+        foot.SetBounds(CardX,784,CardW,22);foot.Font=new Font(Font.FontFamily,8f);
+        foot.ForeColor=Palette.Faint;foot.BackColor=Palette.Bg;
+        Controls.Add(foot);
+    }
+
+    // 卡片标题：序号圆点 + 标题 + 右侧说明
+    void Heading(Control parent,string number,string title,string right) {
+        var badge=new StepBadge(number){Location=new Point(18,15)};
+        parent.Controls.Add(badge);
+        AddText(parent,title,46,13,320,24,10f,Palette.Ink,null,FontStyle.Bold);
+        AddText(parent,right,420,17,294,22,8.5f,Palette.Faint,null,FontStyle.Regular,ContentAlignment.TopRight);
+    }
+
+    void Step(Control parent,int x,int y,string number,string title,string detail) {
+        var badge=new StepBadge(number){Location=new Point(x,y+2)};
+        parent.Controls.Add(badge);
+        AddText(parent,title,x+28,y,320,20,9f,Palette.Ink,null,FontStyle.Bold);
+        AddText(parent,detail,x+28,y+20,320,18,8.5f,Palette.Faint);
+    }
+
+    Label AddText(Control parent,string value,int x,int y,int width,int height,float size,Color color,Color? back=null,FontStyle style=FontStyle.Regular,ContentAlignment align=ContentAlignment.TopLeft) {
+        var label=new Label{Text=value,AutoSize=false,UseCompatibleTextRendering=false};
+        label.SetBounds(x,y,width,height);
+        label.Font=new Font(Font.FontFamily,size,style);
+        label.ForeColor=color;
+        label.BackColor=back??Palette.Card;
+        label.TextAlign=align;
+        parent.Controls.Add(label);
+        return label;
+    }
+
     void ScheduleDetection(){if(testProfile!=null)return;detectDebounce.Stop();detectDebounce.Start();}
     // Startup / change-time check: is 校事笺 already prepared here, and is it already loaded in the browser?
     void RunDetection() {
@@ -262,19 +503,26 @@ internal class SetupWindow:Form {
             }
             string profileName=ProfileName(loaded.profile);
             detectLabel.Text="检测结果：校事笺 "+(loaded.version??"")+" 已在"+vendor+"「"+profileName+"」配置"+(loaded.enabled?"中加载，不必重新安装":"中加载但已被停用");
-            detectLabel.ForeColor=loaded.enabled?Color.FromArgb(23,111,98):Color.FromArgb(176,108,22);
+            detectLabel.ForeColor=loaded.enabled?Palette.Brand:Palette.Amber;
+            detectHint.Text=loaded.enabled
+                ?"已就绪，无需重新准备。点“如何打开工作台”查看打开方法；重新准备文件仅用于更新或修复。"
+                :"当前处于停用状态，请点“打开扩展管理页”重新开启。";
             status.Text=loaded.enabled
                 ?"检测到已有安装（"+loaded.folder+"），无需重新准备。点“如何打开工作台”查看打开方法；重新准备文件仅用于更新或修复。"
                 :"检测到校事笺在"+vendor+"的「"+profileName+"」配置中加载，但当前处于停用状态。请点“打开扩展管理页”重新开启。";
             copy.Enabled=manage.Enabled=workbench.Enabled=true;
             install.Text=loaded.version==Setup.Plan.version?"文件已就绪（重新准备可修复）":"准备安装并打开浏览器（更新文件）";
         } else if(receipt!=null) {
-            detectLabel.Text="检测结果：此前已准备过文件 v"+receipt.version+"，"+vendor+"里尚未检测到已加载";detectLabel.ForeColor=Color.FromArgb(176,108,22);
+            detectLabel.Text="检测结果：此前已准备过文件 v"+receipt.version+"，"+vendor+"里尚未检测到已加载";
+            detectLabel.ForeColor=Palette.Amber;
+            detectHint.Text="文件已经在本地，只差浏览器首次加载。上方第 2 步按顺序操作即可。";
             status.Text="检测到此前用助手准备过文件（位于 "+receipt.folder+"）。若这个浏览器里还没加载，点“打开扩展管理页”完成首次加载即可，不必重新准备。";
             copy.Enabled=manage.Enabled=workbench.Enabled=true;
             detectedResult=new InstallResult{success=true,version=receipt.version,folder=receipt.folder,extensionId=receipt.extensionId,browser=kind,browserPath=receipt.browserPath??Setup.FindBrowser(kind),dashboardUrl=receipt.dashboardUrl,manualConfirmationRequired=true};
         } else {
-            detectLabel.Text="检测结果：未发现已安装的校事笺，按首次安装进行";detectLabel.ForeColor=Color.FromArgb(120,120,120);
+            detectLabel.Text="检测结果：未发现已安装的校事笺，按首次安装进行";
+            detectLabel.ForeColor=Palette.Faint;
+            detectHint.Text="点上方按钮准备文件；完成后按第 2 步在浏览器里确认一次即可。";
         }
     }
     static string ProfileName(string profilePath){try{return String.IsNullOrEmpty(profilePath)?"当前配置":Path.GetFileName(profilePath);}catch{return "当前配置";}}
@@ -290,7 +538,9 @@ internal class SetupWindow:Form {
     }
     internal bool TestManagementButton(string report) {
         manage.PerformClick();
-        File.WriteAllText(report,Setup.Json.Serialize(new {success=managementOpened,clipboardAddress=Clipboard.GetText(),managementAddress=managementAddress.Text,status=status.Text,buttonText=manage.Text,copyDirectoryEnabled=copy.Enabled}),new UTF8Encoding(false));return managementOpened;
+        // 系统剪贴板可能被其他程序占用而读取失败，报告本身不能因此中断。
+        string clip=null;try{clip=Clipboard.GetText();}catch{}
+        File.WriteAllText(report,Setup.Json.Serialize(new {success=managementOpened,clipboardAddress=clip,managementAddress=managementAddress.Text,status=status.Text,buttonText=manage.Text,copyDirectoryEnabled=copy.Enabled}),new UTF8Encoding(false));return managementOpened;
     }
     void UpdateLoadPath(){try{loadPath.Text="扩展加载目录："+Path.Combine(folder.Text.Trim(),"Extension");}catch{loadPath.Text="请填写有效的安装位置。";}}
     void BrowseClick(object sender,EventArgs e) {
@@ -305,14 +555,29 @@ internal class SetupWindow:Form {
     }
     internal void ChooseBrowser(string kind){browser.SelectedIndex=kind=="chrome"?1:0;}
     internal void StartPreparation(){install.PerformClick();}
-    void AddLabel(string text,int x,int y,int width,int height){var label=new Label {Text=text};label.SetBounds(x,y,width,height);Controls.Add(label);}
     async void InstallClick(object sender,EventArgs e) {
-        preparing=true;install.Enabled=browser.Enabled=folder.Enabled=browse.Enabled=manage.Enabled=false;string kind=browser.SelectedIndex==0?"edge":"chrome";string selectedRoot=folder.Text.Trim();
+        preparing=true;
+        install.Enabled=browser.Enabled=folder.Enabled=browse.Enabled=manage.Enabled=copy.Enabled=false;
+        progress.Visible=true;
+        string kind=browser.SelectedIndex==0?"edge":"chrome";string selectedRoot=folder.Text.Trim();
         try {
             installed=await System.Threading.Tasks.Task.Run(()=>Setup.Install(selectedRoot,shortcutsOverride??Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),kind,s=>BeginInvoke(new Action(()=>status.Text=s))));
-            applyingResult=true;folder.Text=Path.GetDirectoryName(installed.folder);applyingResult=false;copy.Enabled=manage.Enabled=workbench.Enabled=true;install.Text="文件已准备好";
+            applyingResult=true;folder.Text=Path.GetDirectoryName(installed.folder);applyingResult=false;
+            copy.Enabled=manage.Enabled=workbench.Enabled=true;install.Text="文件已准备好";
+            detectLabel.Text="检测结果：文件已放置完成，等待你在浏览器里确认加载";
+            detectLabel.ForeColor=Palette.Amber;
+            detectHint.Text="下一步：在打开的浏览器窗口完成第 2 步；加载完成后校事笺会自动打开工作台。";
             if(!noOpen){OpenManagement();if(installed.warning!=null)status.Text=installed.warning+" "+status.Text;}
             if(Completed!=null)Completed(installed);
-        }catch(Exception error){status.Text=error.Message;install.Enabled=true;if(Completed!=null)Completed(new InstallResult{success=false,error=error.Message});else MessageBox.Show(this,error.Message,"安装未完成，原有数据保留",MessageBoxButtons.OK,MessageBoxIcon.Warning);}finally{preparing=false;browser.Enabled=folder.Enabled=browse.Enabled=manage.Enabled=true;}
+        }catch(Exception error){
+            status.Text=error.Message;install.Enabled=true;
+            detectLabel.Text="准备未完成，原有数据已保留";detectLabel.ForeColor=Palette.Red;
+            detectHint.Text=error.Message;
+            if(Completed!=null)Completed(new InstallResult{success=false,error=error.Message});
+            else MessageBox.Show(this,error.Message,"安装未完成，原有数据保留",MessageBoxButtons.OK,MessageBoxIcon.Warning);
+        }finally{
+            preparing=false;progress.Visible=false;
+            browser.Enabled=folder.Enabled=browse.Enabled=manage.Enabled=true;
+        }
     }
 }

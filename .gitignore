@@ -4,3 +4,9 @@ release/
 test-results/
 .test-profile*/
 public/vendor/
+
+# 本地安装验证产物（旧版解包结果，体积大且可重建）
+/测试/
+
+# 本地会话数据与项目记忆，不进版本库
+.workbuddy/

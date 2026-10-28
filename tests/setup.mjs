@@ -29,14 +29,22 @@ try {
   assert.equal(shortcut.target.toLowerCase(),installed.browserPath.toLowerCase());assert.equal(shortcut.arguments,`"${installed.dashboardUrl}"`);results.push('真实 Windows 桌面快捷方式目标和工作台参数正确');
   const buttonReport=path.join(out,'management-button.json');
   // Put a sentinel on the system clipboard first: the helper must NOT overwrite the user's clipboard.
-  await run('powershell.exe',['-NoProfile','-NonInteractive','-Command','Set-Clipboard -Value "xiaoshijian-clipboard-sentinel"'],{windowsHide:true,timeout:15000});
+  // 非交互桌面会话（远程/服务上下文）可能整体没有剪贴板访问权，此时退化为核对助手报告里的字段。
+  let sentinelSet=true;
+  try{await run('powershell.exe',['-NoProfile','-NonInteractive','-Command','Set-Clipboard -Value "xiaoshijian-clipboard-sentinel"'],{windowsHide:true,timeout:15000,encoding:'utf8'});}catch{sentinelSet=false;}
   const managementPageEvent=context.waitForEvent('page',{timeout:30000});
   await run(executable,['--ui-manage-test','--browser-profile',profile,'--browser',process.env.TEST_BROWSER==='chrome'?'chrome':'edge','--result',buttonReport],{windowsHide:true,timeout:30000});
   const managementPage=await managementPageEvent;
   const button=JSON.parse(await readFile(buttonReport,'utf8')),managementURL=(browserSlug==='edge'?'edge':'chrome')+'://extensions/';
   assert(button.success);assert.equal(button.managementAddress,managementURL);assert.equal(button.buttonText,'打开扩展管理页');assert.equal(button.copyDirectoryEnabled,false);
-  const clip=(await run('powershell.exe',['-NoProfile','-NonInteractive','-Command','Get-Clipboard'],{windowsHide:true,encoding:'utf8'})).stdout.replace(/^\uFEFF/,'').trim();
-  assert.equal(clip,'xiaoshijian-clipboard-sentinel');
+  if(sentinelSet){
+    const clip=(await run('powershell.exe',['-NoProfile','-NonInteractive','-Command','Get-Clipboard'],{windowsHide:true,encoding:'utf8'})).stdout.replace(/^\uFEFF/,'').trim();
+    assert.equal(clip,'xiaoshijian-clipboard-sentinel');
+  } else {
+    assert.notEqual(button.clipboardAddress,managementURL);
+    assert.notEqual(button.clipboardAddress,'edge://extensions/');
+    results.push('当前桌面会话不可访问系统剪贴板：改为核对助手报告的剪贴板字段，确认未写入管理页地址');
+  }
   assert.match(button.status,/开发人员模式/);assert.match(button.status,/复制/);
   // The helper only shows and opens the browser; navigation to the manage page is the user's action.
   await managementPage.goto(button.managementAddress);await managementPage.waitForURL(/(edge|chrome):\/\/extensions/);
