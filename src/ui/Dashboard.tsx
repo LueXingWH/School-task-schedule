@@ -8,14 +8,16 @@ import {WelcomePanel} from './WelcomePanel';
 import {ImportPanel} from './ImportPanel';
 import {SettingsPanel,loadSettings} from './SettingsPanel';
 import {NoticeCard} from './NoticeCard';
+import {McpPanel} from './McpPanel';
 
 const TITLES:Record<string,string>={
   welcome:'校事笺已准备好',
   home:'今天，从容一点',
-  all:'所有通知',
-  review:'待核对',
-  done:'完成与归档',
-  import:'收进校事笺',
+  all:'所有日程',
+  active:'未完成',
+  done:'完成',
+  import:'导入日程',
+  mcp:'MCP 配置',
   settings:'设置与数据',
 };
 
@@ -41,26 +43,26 @@ export function Dashboard({notices,jobs,route}:{notices:Notice[];jobs:ParseJob[]
     window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey);
   },[]);
 
-  const review=notices.filter(n=>n.life==='review');
-  const done=notices.filter(n=>n.life==='done'||n.life==='archived');
+  const done=notices.filter(n=>n.life==='done');
   const active=notices.filter(actionable);
   const todayItems=active.filter(n=>today(n,now));
   const late=active.filter(n=>overdue(n,now));
   const soon=active.filter(n=>upcoming(n,settings.upcomingDays,now));
   const progress=overallProgress(active);
 
-  const view=route.split('/')[0];
+  const view=route.split('/')[0]==='review'?'active':route.split('/')[0];
   const selected=view==='notice'?notices.find(n=>n.id===route.split('/')[1]):undefined;
-  const title=selected?selected.title:(TITLES[view]||'通知详情');
+  const title=selected?'日程详情':(TITLES[view]||'日程详情');
 
   const nav=[
     {key:'home',icon:'◷',name:'我的首页',alert:late.length},
-    {key:'all',icon:'▤',name:'所有通知',count:active.length},
-    {key:'review',icon:'◇',name:'待核对',count:review.length},
-    {key:'done',icon:'✓',name:'完成与归档',count:done.length},
+    {key:'all',icon:'▤',name:'所有日程',count:notices.length},
+    {key:'active',icon:'○',name:'未完成',count:active.length},
+    {key:'done',icon:'✓',name:'完成',count:done.length},
+    {key:'mcp',icon:'⌘',name:'MCP 配置'},
   ];
 
-  let list=view==='review'?review:view==='done'?done:active;
+  let list=view==='done'?done:view==='all'?notices:active;
   if(query){
     const needle=query.toLowerCase();
     list=list.filter(n=>(n.title+' '+n.sources.map(s=>s.text).join(' ')+' '+n.materials.map(m=>m.name).join(' ')).toLowerCase().includes(needle));
@@ -85,7 +87,7 @@ export function Dashboard({notices,jobs,route}:{notices:Notice[];jobs:ParseJob[]
   return <div className={`shell ${settings.compact?'compact':''}`}>
     <aside className="sidebar">
       <a href="#home" className="brand"><img src="icons/48.png" alt=""/><div>校事笺<small>把通知，变成有序的行动</small></div></a>
-      <a href="#import" className="primary new-import">＋ 收录新通知</a>
+      <a href="#import" className="primary new-import">＋ 导入日程</a>
       <nav>
         {nav.map(item=><a key={item.key} href={`#${item.key}`} className={view===item.key?'selected':''}>
           <span>{item.icon}</span>{item.name}
@@ -106,7 +108,7 @@ export function Dashboard({notices,jobs,route}:{notices:Notice[];jobs:ParseJob[]
         <span className="local-badge">本地工作台</span>
       </header>
 
-      {view==='welcome'?<WelcomePanel/>:selected?<Detail key={selected.id} notice={selected} jobs={jobs.filter(j=>j.noticeId===selected.id)}/>:view==='notice'?<div className="empty"><span>▧</span><h2>通知已删除或正在载入</h2><p>它可能已在另一个窗口被删除。</p><a href="#all">返回列表</a></div>:view==='import'?<ImportPanel notices={notices} initialNoticeId={route.split('/')[1]}/>:view==='settings'?<SettingsPanel settings={settings} onSettings={s=>{setSettings(s);setSort(s.sort);}}/>:<>
+      {view==='welcome'?<WelcomePanel/>:selected?<Detail key={selected.id} notice={selected} jobs={jobs.filter(j=>j.noticeId===selected.id)}/>:view==='notice'?<div className="empty"><span>▧</span><h2>通知已删除或正在载入</h2><p>它可能已在另一个窗口被删除。</p><a href="#all">返回列表</a></div>:view==='import'?<ImportPanel key={route} notices={notices} initialNoticeId={route.split('/')[1]}/>:view==='mcp'?<McpPanel/>:view==='settings'?<SettingsPanel settings={settings} onSettings={s=>{setSettings(s);setSort(s.sort);}}/>:<>
         {view==='home'&&<>
           <div className="intro-banner">
             <div>
@@ -117,7 +119,7 @@ export function Dashboard({notices,jobs,route}:{notices:Notice[];jobs:ParseJob[]
               <div className="hero-stats">
                 <div className="hero-stat"><strong>{todayItems.length}</strong><small>今日要办</small></div>
                 <div className="hero-stat"><strong>{progress.done}<span>/{progress.total}</span></strong><small>材料已备</small></div>
-                <div className="hero-stat"><strong>{review.length}</strong><small>等你核对</small></div>
+                <div className="hero-stat"><strong>{active.length}</strong><small>未完成</small></div>
               </div>
               <a href="#import">收录一份通知 ↗</a>
             </div>
@@ -132,9 +134,9 @@ export function Dashboard({notices,jobs,route}:{notices:Notice[];jobs:ParseJob[]
               <span className="metric-icon amber">◔</span>
               <span className="metric-body"><strong>{soon.length}<span>件</span></strong><small>未来 {settings.upcomingDays} 天截止</small></span>
             </button>
-            <a href="#review">
+            <a href="#active">
               <span className="metric-icon violet">◇</span>
-              <span className="metric-body"><strong>{review.length}<span>件</span></strong><small>等你核对</small></span>
+              <span className="metric-body"><strong>{active.length}<span>件</span></strong><small>未完成</small></span>
             </a>
             <button onClick={()=>setFilter('late')} className={late.length?'warn':''}>
               <span className={`metric-icon ${late.length?'red':''}`}>!</span>
@@ -155,7 +157,7 @@ export function Dashboard({notices,jobs,route}:{notices:Notice[];jobs:ParseJob[]
                     {n.deadline?.confirmed&&n.deadline.value.slice(0,10)===localDay(now)&&<span className="task-chip amber">今天截止</span>}
                   </li>)}
                 </ul>
-              : <p className="today-empty"><span>今天没有已确认的待办，去通知详情里安排准备日期。</span><a href="#review">去核对日期 →</a></p>}
+              : <p className="today-empty"><span>今天没有已确认的待办，去通知详情里安排准备日期。</span><a href="#active">去安排日程 →</a></p>}
             {active.filter(n=>!n.deadline?.confirmed&&n.deadline?.value.slice(0,10)===localDay(now)).map(n=>
               <p key={n.id} className="warning">可能今日截止 / 待核对：<a href={`#notice/${n.id}`}>{n.title}</a></p>)}
           </section>

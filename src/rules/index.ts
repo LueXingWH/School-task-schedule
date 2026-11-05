@@ -3,6 +3,7 @@ import { extractDates } from './dates';
 import { extractMaterials, materialKey } from './materials';
 import { titleFrom } from './title';
 import { mergeActions } from './actions';
+import { summaryFrom } from './summary';
 export function derive(n: Notice): Notice {
   const dates = n.sources.flatMap(extractDates);
   // Preserve candidate identity when the same evidence is encountered again.
@@ -14,9 +15,10 @@ export function derive(n: Notice): Notice {
   });
   for(const old of n.materials) if(old.origin==='manual'||old.edited||old.done) { if(!materials.some(m=>m.id===old.id))materials.push(old); }
   let deadline=n.deadline;
-  if(!n.deadlineEdited && !deadline?.confirmed) { const first=dates.find(d=>d.role==='deadline'&&d.value&&d.valid&&!d.tentative); deadline=first ? {value:first.value!,precision:first.precision as 'day'|'minute',confirmed:false,candidateId:first.id} : undefined; }
+  if(!n.deadlineEdited && !deadline?.confirmed) { const first=dates.filter(d=>d.role==='deadline'&&d.value&&d.valid&&!d.tentative).sort((a,b)=>a.value!.localeCompare(b.value!))[0]; deadline=first ? {value:first.value!,precision:first.precision as 'day'|'minute',confirmed:false,candidateId:first.id} : undefined; }
   // A corrected source may move or remove the original candidate. Keep the confirmed
   // deadline while dropping a reference that would make a later backup invalid.
   if(deadline?.candidateId){const candidateId=deadline.candidateId;if(!dates.some(d=>d.id===candidateId))deadline={...deadline,candidateId:undefined};}
-  return {...n, title:n.titleEdited ? n.title : n.sources.find(s=>s.titleHint)?.titleHint||titleFrom(n.sources.map(s=>s.text).join('\n'),n.title),dates,materials,actions:mergeActions(n,dates),deadline,updatedAt:Date.now()};
+  const title=n.titleEdited ? n.title : n.sources.find(s=>s.titleHint)?.titleHint||titleFrom(n.sources.map(s=>s.text).join('\n'),n.title);
+  return {...n,title,summary:n.summaryEdited?n.summary:summaryFrom(n.sources,title),dates,materials,actions:mergeActions(n,dates),deadline,updatedAt:Date.now()};
 }

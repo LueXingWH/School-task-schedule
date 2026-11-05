@@ -1,5 +1,5 @@
 import { describe,it,expect } from 'vitest';
-import {extractDates,validDay} from '../src/rules/dates';
+import {extractDates,validDay,validDeadline} from '../src/rules/dates';
 import {extractMaterials} from '../src/rules/materials';
 import {derive} from '../src/rules';
 import {today,overdue,sortNotices,localDay} from '../src/schedule';
@@ -8,7 +8,7 @@ import {zipSync,strToU8} from 'fflate';
 import type {Notice,Source} from '../src/model';
 import {titleFrom} from '../src/rules/title';
 const source=(text:string):Source=>({id:'s',kind:'text',name:'通知',text,originalText:text});
-const notice=(text='',extra:Partial<Notice>={}):Notice=>({id:'n',title:'原题',titleEdited:false,life:'review',deadlineEdited:false,createdAt:1,updatedAt:1,sources:[source(text)],dates:[],materials:[],tasks:[],dismissedMaterials:[],...extra});
+const notice=(text='',extra:Partial<Notice>={}):Notice=>({id:'n',title:'原题',titleEdited:false,life:'active',deadlineEdited:false,createdAt:1,updatedAt:1,sources:[source(text)],dates:[],materials:[],tasks:[],dismissedMaterials:[],...extra});
 describe('日期及角色',()=>{
   it('区分截止、初审与暂定评选，继承正文年份',()=>{const d=extractDates(source('2026年11月9日报名截止；11月10日前初审；初定11月12日评选'));expect(d.map(x=>[x.value,x.role,x.tentative])).toEqual([['2026-11-09','deadline',false],['2026-11-10','other',false],['2026-11-12','other',true]]);});
   it('缺年不补本机年份',()=>{expect(extractDates(source('11月9日截止'))[0]).toMatchObject({value:undefined,precision:'unknown'});});
@@ -17,7 +17,21 @@ describe('日期及角色',()=>{
   it('无效日期不能选入主截止',()=>{expect(validDay('2026-02-30')).toBe(false);expect(derive(notice('2026年2月30日截止')).deadline).toBeUndefined();});
   it('展出区间不当报名截止',()=>{expect(extractDates(source('2026年11月9日至11月12日展出')).every(d=>d.role==='other')).toBe(true);});
   it('相对日期无基准不强转',()=>{const d=extractDates(source('三天后截止'))[0];expect(d.value).toBeUndefined();expect(d.ruleId).toBe('date.relative-unresolved.v1');});
+  it('全角相对日期的依据仍是原始输入',()=>{const d=extractDates(source('３天后提交'))[0];expect(d.raw).toBe('３天后提交');expect(d.value).toBeUndefined();});
   it('保留时刻并校验',()=>{expect(extractDates(source('2026-11-09 18:30 提交截止'))[0].value).toBe('2026-11-09T18:30');expect(extractDates(source('2026年11月9日29:00截止'))[0].valid).toBe(false);});
+  it('全角数字、星期括号和时刻仍保留精确原文区间',()=>{
+    const s=source('报名截止：２０２６年１１月９日（周一）１８：３０。'),d=extractDates(s)[0];
+    expect(d.value).toBe('2026-11-09T18:30');expect(d.role).toBe('deadline');expect(s.text.slice(d.start,d.end)).toBe(d.raw);
+  });
+  it('报名区间的结束日作为截止候选，活动区间仍是其他时间',()=>{
+    expect(extractDates(source('报名时间：2026年11月5日至11月9日')).map(d=>d.role)).toEqual(['other','deadline']);
+    expect(derive(notice('报名时间：2026年11月5日至11月9日')).deadline?.value).toBe('2026-11-09');
+    expect(extractDates(source('活动时间：2026年11月5日至11月9日')).every(d=>d.role==='other')).toBe(true);
+  });
+  it('多项截止按最近日期建议，已经人工确认的日期保留',()=>{
+    expect(derive(notice('2026年11月12日提交作品；2026年11月9日提交报名表')).deadline?.value).toBe('2026-11-09');
+  });
+  it('拒绝残缺时刻或额外日期分段',()=>{for(const value of ['2026-11-09T','2026-11-09T18:30T20:30','2026-11-09T24:00'])expect(validDeadline(value)).toBe(false);});
   it('全部候选都关联保存正文中的实际区间',()=>{const s=source('活动通知\n2026年11月9日截止\n提交材料：报名表、作品介绍PPT');for(const d of extractDates(s))expect(s.text.slice(d.start,d.end)).toBe(d.raw);for(const m of extractMaterials(s))expect(s.text.slice(m.evidence!.start,m.evidence!.end).length).toBeGreaterThan(0);});
 });
 describe('材料与重解析',()=>{

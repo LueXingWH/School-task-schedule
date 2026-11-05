@@ -1,20 +1,20 @@
-# 校事笺 1.5.0
+# 校事笺 1.6.0
 
 本地校园通知管理扩展。把群消息、网页、截图、PDF 与 DOCX 收进工作台，核对截止日，安排个人任务，逐项准备材料。
 
-1.5.0 新增本地 MCP 接入，让 agent 直接添加和查询日程。安装助手随包准备桥接，设置页可启用接入并复制配置，使用见 [MCP 指南](docs/mcp-guide.md)。保留标题/待办/时间自动提取、扫描 PDF OCR 和紧凑日程界面。
+1.6.0 支持单项与批量导入，主截止日可直接修改并即时保存，通知仅有“未完成 / 完成”两种状态。详情按“主标题 → 内容概述 → 原文”展示；改进全角日期、报名区间与连续事项时间识别。左侧“MCP 配置”可启用本地 agent 接入并复制配置，使用见 [MCP 指南](docs/mcp-guide.md)。
 
 普通用户直接安装生产扩展，无需 Node、Python、单独部署的服务器、账号或模型 API 密钥。OCR 使用随包提供的中英文 Tesseract 识别数据，核心功能可断网运行。
 
 ## 安装
 
-推荐直接双击 `release/xiaoshijian-1.5.0-setup.exe`，可点击“浏览…”选择安装位置或直接修改路径，然后点击“准备安装并打开浏览器”。助手自动放置资源、创建桌面入口并打开 Edge。点击“复制网址”后，在浏览器按 Ctrl+L、Ctrl+V、回车，开启开发人员模式、点击加载解压缩扩展；回到助手点“复制扩展加载目录”，在文件夹窗口粘贴并确认。加载后默认设置与欢迎页自动就绪。以后可从桌面一键打开。
+推荐直接双击 `release/xiaoshijian-1.6.0-setup.exe`，可点击“浏览…”选择安装位置或直接修改路径，然后点击“准备安装并打开浏览器”。助手自动放置资源、创建桌面入口并打开 Edge。点击“复制网址”后，在浏览器按 Ctrl+L、Ctrl+V、回车，开启开发人员模式、点击加载解压缩扩展；回到助手点“复制扩展加载目录”，在文件夹窗口粘贴并确认。加载后默认设置与欢迎页自动就绪。以后可从桌面一键打开。
 
 详细步骤与迁移见 [安装助手指南](docs/install-assistant.md)。当前尚未上架商店，助手保留浏览器首次加载确认，不能称为无确认的静默安装。真正的商店“获取 / 添加”方式需要发布审核，已准备 [提交材料](docs/store-submission.md)。
 
 仍可使用原 ZIP 方式：
 
-1. 使用 Windows Microsoft Edge 或 Google Chrome，将 `release/xiaoshijian-1.5.0-edge.zip`（或 `-chrome.zip`）解压到固定文件夹，也可直接使用本项目 `dist`。本轮实测 Edge 156、Chrome 156。
+1. 使用 Windows Microsoft Edge 或 Google Chrome，将 `release/xiaoshijian-1.6.0-edge.zip`（或 `-chrome.zip`）解压到固定文件夹，也可直接使用本项目 `dist`。本轮实测 Edge 156、Chrome 156。
 2. Edge 地址栏输入 `edge://extensions`，开启“开发人员模式”；Chrome 输入 `chrome://extensions`，开启“开发者模式”。
 3. 点击“加载已解压的扩展程序”，选择包含 `manifest.json` 的文件夹（本项目为 `dist`）。
 4. 在工具栏“扩展程序”里固定“校事笺”，点击图标，打开工作台。
@@ -53,7 +53,7 @@ npm.cmd run deliver
 ## 目录
 
 - `src/ui`：工作台、导入、通知详情、设置；`popup.tsx` / `background.ts`：工具栏与事件。
-- `src/db.ts`：IndexedDB schema v2、事务、关联删除；`model.ts`：模型及限额。
+- `src/db.ts`：IndexedDB schema v3、批量导入事务与旧状态迁移；`model.ts`：模型及限额。
 - `src/rules` / `schedule.ts`：标题、时间、待办与材料候选、日期规则和任务排序。
 - `src/parsers.ts` / `docx.worker.ts` / `jobs.ts`：真实解析器、本地 OCR、跨窗口串行任务及取消。
 - `src/backup.ts` / `zip.ts`：完整 ZIP 备份、格式/关系/大小/校验检查、新 ID 副本合并恢复。

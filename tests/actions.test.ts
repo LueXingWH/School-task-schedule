@@ -6,9 +6,20 @@ import {titleFrom} from '../src/rules/title';
 import type {Notice,Source} from '../src/model';
 
 const source=(text:string):Source=>({id:'s',kind:'text',name:'通知',text,originalText:text});
-const notice=(text:string):Notice=>({id:'n',title:'通知',titleEdited:false,deadlineEdited:false,life:'review',createdAt:1,updatedAt:1,sources:[source(text)],dates:[],materials:[],tasks:[],dismissedMaterials:[]});
+const notice=(text:string):Notice=>({id:'n',title:'通知',titleEdited:false,deadlineEdited:false,life:'active',createdAt:1,updatedAt:1,sources:[source(text)],dates:[],materials:[],tasks:[],dismissedMaterials:[]});
 
 describe('待办与对应时间',()=>{
+  it('逗号后的事项共用明确时间，句号后不借用',()=>{
+    const a=extractActions(source('请于2026年11月9日18:00前，提交报名表，并上传作品。准备答辩材料。'));
+    expect(a.map(a=>[a.text,a.time])).toEqual([['提交报名表','2026-11-09T18:00'],['上传作品','2026-11-09T18:00'],['准备答辩材料',undefined]]);
+  });
+  it('上一句已有事项时，新日期前置子句仍正确关联',()=>{
+    const a=extractActions(source('2026年11月8日提交申请。\n请于11月9日18:00前，上传作品。'));
+    expect(a.map(a=>a.time)).toEqual(['2026-11-08','2026-11-09T18:00']);
+  });
+  it('全角日期移除后保留清晰的事项文本',()=>{
+    expect(extractActions(source('２０２６年１１月９日１８：３０前提交报名表'))[0]).toMatchObject({text:'提交报名表',time:'2026-11-09T18:30'});
+  });
   it('分离多个事项，各自关联日期和时刻',()=>{
     const actions=extractActions(source('校园竞赛通知\n请于2026年11月9日18:30前提交报名表，并于11月12日下午3点参加答辩。\n准备作品演示。'));
     expect(actions.map(a=>[a.text,a.time])).toEqual([['提交报名表','2026-11-09T18:30'],['参加答辩','2026-11-12T15:00'],['准备作品演示',undefined]]);

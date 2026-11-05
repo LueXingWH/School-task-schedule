@@ -1,6 +1,6 @@
 {
   "name": "xiaoshijian",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:e2e": "node tests/browser.mjs",
     "test:recognition": "node tests/recognition.mjs",
+    "test:workflow": "node tests/workflow.mjs",
     "fixtures": "node tests/fixtures.mjs",
     "test:install": "node tests/install.mjs",
     "test:public": "node tests/public-web.mjs",

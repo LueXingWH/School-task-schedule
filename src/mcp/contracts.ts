@@ -28,7 +28,7 @@ export function scheduleView(n:Notice,t:PersonalTask){
     source:t.agent?`MCP · ${t.agent.client}`:'个人任务',...(t.agent?{notes:t.agent.notes}:{} )};
 }
 export function scheduleList(notices:Notice[],input:z.infer<typeof listSchedulesInput>){
-  const list=notices.filter(n=>input.include_done||n.life!=='done'&&n.life!=='archived').flatMap(n=>n.tasks.filter(t=>
+  const list=notices.filter(n=>input.include_done||n.life!=='done').flatMap(n=>n.tasks.filter(t=>
     (input.include_done||!t.done)&&(!input.date_from||t.date>=input.date_from)&&(!input.date_to||t.date<=input.date_to)).map(t=>{
       const view=scheduleView(n,t);return view.notes&&view.notes.length>500?{...view,notes:view.notes.slice(0,500),notes_truncated:true}:view;
     }))

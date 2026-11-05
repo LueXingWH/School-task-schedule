@@ -19,12 +19,12 @@ describe('MCP 参数与日程',()=>{
   it('日程来源和备注原文可回看',()=>{
     const n=scheduleNotice(input(),'client','a'.repeat(64));expect(n.sources[0].name).toBe('MCP · client');expect(n.sources[0].originalText).toContain('带上演示材料');
   });
-  it('列表按日期时刻排序，过滤完成与归档，正确标记截断',()=>{
+  it('列表按日期时刻排序，过滤完成通知，正确标记截断',()=>{
     const n=scheduleNotice(input(),'client','a'.repeat(64));n.tasks.push({...n.tasks[0],id:'t2',time:'09:00'});
     const later=scheduleNotice({...input(),date:'2026-11-10'},'client','a'.repeat(64));later.tasks[0].done=true;
     const all=scheduleList([later,n],listSchedulesInput.parse({limit:1}));expect(all.items[0].time).toBe('09:00');expect(all.has_more).toBe(true);expect(all.total).toBe(2);
     expect(scheduleList([later,n],listSchedulesInput.parse({date_from:'2026-11-10',include_done:true})).total).toBe(1);
-    n.life='archived';expect(scheduleList([n],listSchedulesInput.parse({})).total).toBe(0);
+    n.life='done';expect(scheduleList([n],listSchedulesInput.parse({})).total).toBe(0);
   });
   it('拒绝过大查询、颠倒范围与非日期',()=>{
     for(const value of [{limit:101},{limit:0},{date_from:'2026-11-10',date_to:'2026-11-01'},{date_to:'2026-02-30'}])expect(listSchedulesInput.safeParse(value).success).toBe(false);

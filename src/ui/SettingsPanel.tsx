@@ -5,7 +5,6 @@ import {useLive} from '../hooks';
 import {localDay,overallProgress} from '../schedule';
 import {type Settings} from '../model';
 import {DEFAULT_SETTINGS as defaults} from '../settings';
-import {McpPanel} from './McpPanel';
 
 export async function loadSettings():Promise<Settings>{
   if(!globalThis.chrome?.storage)return defaults;
@@ -45,7 +44,6 @@ export function SettingsPanel({settings,onSettings}:{settings:Settings;onSetting
 
   return <div className="settings-grid">
     <div className="settings-col">
-      <McpPanel/>
       <section className="panel">
         <div className="section-heading"><h2>数据与备份</h2><span>本地浏览器数据库</span></div>
         <div className="stat-row">

@@ -13,8 +13,6 @@ import {confirmSchedule} from '../rules/actions';
 const states={waiting:'等待',running:'处理中',success:'成功',partial:'部分成功',failed:'失败',cancelled:'已取消'};
 
 export function Detail({notice:n,jobs}:{notice:Notice;jobs:ParseJob[]}) {
-  const [day,setDay]=useState('');
-  const [clock,setClock]=useState('');
   const [name,setName]=useState('');
   const [task,setTask]=useState('');
   const [taskDay,setTaskDay]=useState('');
@@ -22,7 +20,7 @@ export function Detail({notice:n,jobs}:{notice:Notice;jobs:ParseJob[]}) {
   const [confirmDelete,setConfirmDelete]=useState(false);
   const [tab,setTab]=useState('actions');
   const [confirming,setConfirming]=useState(false);
-  useEffect(()=>{if(n.actions===undefined)void rederive(n.id);},[n.id,n.actions===undefined]);
+  useEffect(()=>{if(n.actions===undefined||n.summary===undefined)void rederive(n.id);},[n.id,n.actions===undefined,n.summary===undefined]);
 
   const update=(fn:Parameters<typeof change>[1])=>change(n.id,fn);
   const mats=materialStats(n);
@@ -30,17 +28,19 @@ export function Detail({notice:n,jobs}:{notice:Notice;jobs:ParseJob[]}) {
   const left=daysLabel(n);
   const pct=Math.round(mats.ratio*100);
 
-  const deadline=async()=>{
-    const value=day+(clock?'T'+clock:'');
-    if(!validDeadline(value)){setMessage('请输入有效日期');return;}
-    await update(x=>{x.deadline={value,precision:clock?'minute':'day',confirmed:true};x.deadlineEdited=true;});
-    setMessage('截止日已确认保存');
+  const deadline=async(input:string|((saved:Notice['deadline'])=>string))=>{
+    let value='',valid=true;
+    await update(x=>{
+      // Resolve a field edit against the latest saved deadline, including rapid consecutive edits.
+      value=typeof input==='function'?input(x.deadline):input;
+      if(value&&!validDeadline(value)){valid=false;return;}
+      x.deadline=value?{value,precision:value.includes('T')?'minute':'day',confirmed:true}:undefined;x.deadlineEdited=true;
+    });
+    setMessage(!valid?'请输入有效日期':value?'截止日已保存':'截止日已清空');
   };
   const quickDate=(offset:number)=>{
     const d=new Date();d.setDate(d.getDate()+offset);const value=localDay(d);
-    setDay(value);setClock('');
-    void update(x=>{x.deadline={value,precision:'day',confirmed:true};x.deadlineEdited=true;});
-    setMessage(offset===0?'截止日已设为今天':offset===1?'截止日已设为明天':`截止日已设为 ${value}`);
+    void deadline(value);
   };
   const markAllDone=()=>{
     if(!mats.left)return;
@@ -50,11 +50,9 @@ export function Detail({notice:n,jobs}:{notice:Notice;jobs:ParseJob[]}) {
 
   const deadlineValues=[...new Set(n.dates.filter(d=>d.role==='deadline'&&d.value).map(d=>d.value))];
   const confirm=async()=>{
-    if(day&&!validDeadline(day+(clock?'T'+clock:''))){setMessage('请输入有效截止日期');return;}
     setConfirming(true);
     try{let result={added:0,unresolved:0};let hasDeadline=false;
       await update(x=>{
-        if(day){x.deadline={value:day+(clock?'T'+clock:''),precision:clock?'minute':'day',confirmed:true};x.deadlineEdited=true;}
         result=confirmSchedule(x);hasDeadline=!!x.deadline?.confirmed;
       });
       setMessage(`已加入 ${result.added} 项个人任务${hasDeadline?'，截止日已确认':''}${result.unresolved?`；${result.unresolved} 项缺少可靠时间，请补全后再确认`:''}${!result.added&&!result.unresolved&&!hasDeadline?'；请先选择待办并填写日期':''}`);
@@ -69,14 +67,12 @@ export function Detail({notice:n,jobs}:{notice:Notice;jobs:ParseJob[]}) {
     <div className="detail-grid">
       <div className="detail-main">
         <section className="panel notice-overview">
-          <div className="section-heading"><h2>通知信息</h2><span>修改自动保存</span></div>
-          <label>标题<input key={n.id+':'+n.title} aria-label="通知标题" defaultValue={n.title} maxLength={1000} onBlur={e=>{const title=e.target.value.trim();if(title&&title!==n.title)void update(x=>{x.title=title;x.titleEdited=true;});}}/></label>
+          <div className="section-heading"><h2>主标题</h2><span>修改自动保存</span></div>
+          <label className="notice-title-label">日程标题<input key={n.id+':'+n.title} aria-label="通知标题" defaultValue={n.title} maxLength={1000} onBlur={e=>{const title=e.target.value.trim();if(title&&title!==n.title)void update(x=>{x.title=title;x.titleEdited=true;});else if(!title)e.currentTarget.value=n.title;}}/></label>
           <div className="row">
             <label>通知状态<select aria-label="通知状态" value={n.life} onChange={e=>{const value=e.currentTarget.value as Notice['life'];void update(x=>{x.life=value;});}}>
-              <option value="review">待核对</option>
-              <option value="active">进行中 / 已核对</option>
-              <option value="done">已完成 / 已提交</option>
-              <option value="archived">已归档</option>
+              <option value="active">未完成</option>
+              <option value="done">完成</option>
             </select></label>
             <div className="deadline-display">
               <small>主截止日{left&&<span className={tone==='late'?'warning':'confirmed'} style={{marginLeft:6}}>· {left}</span>}</small>
@@ -84,28 +80,36 @@ export function Detail({notice:n,jobs}:{notice:Notice;jobs:ParseJob[]}) {
               <span className={n.deadline?.confirmed?'confirmed':'warning'}>{n.deadline? n.deadline.confirmed?'已人工确认':'自动建议 · 待核对':'无日期也已保存'}</span>
             </div>
           </div>
-          <details className="deadline-editor">
-          <summary>调整截止日期</summary>
-          <div className="quick-dates">
-            <span>快速设置</span>
-            <button onClick={()=>quickDate(0)}>今天</button>
-            <button onClick={()=>quickDate(1)}>明天</button>
-            <button onClick={()=>quickDate(7)}>一周后</button>
+          <div className="deadline-editor" aria-label="直接修改主截止日">
+            <div className="row deadline-inputs">
+              <label>主截止日期<input aria-label="人工截止日期" type="date" min="1900-01-01" max="2200-12-31" value={n.deadline?.value.slice(0,10)||''} onChange={e=>{const day=e.currentTarget.value;void deadline(saved=>day?day+(saved?.value.includes('T')?'T'+saved.value.split('T')[1]:''):'');}}/></label>
+              <label>时刻（可不填）<input aria-label="人工截止时刻" type="time" disabled={!n.deadline} value={n.deadline?.value.split('T')[1]||''} onChange={e=>{const time=e.currentTarget.value;void deadline(saved=>saved?saved.value.slice(0,10)+(time?'T'+time:''):'');}}/></label>
+            </div>
+            <div className="quick-dates">
+              <span>选好即保存</span>
+              <button onClick={()=>quickDate(0)}>今天</button>
+              <button onClick={()=>quickDate(1)}>明天</button>
+              <button onClick={()=>quickDate(7)}>一周后</button>
+              {n.deadline&&<button onClick={()=>void deadline('')}>清空截止日</button>}
+            </div>
           </div>
-          <div className="row">
-            <label>人工设置日期<input aria-label="人工截止日期" type="date" value={day} onChange={e=>setDay(e.target.value)}/></label>
-            <label>时刻（可不填）<input aria-label="人工截止时刻" type="time" value={clock} onChange={e=>setClock(e.target.value)}/></label>
-          </div>
-          <div className="row">
-            <button onClick={deadline}>确认此截止日</button>
-            <button onClick={()=>void update(x=>{x.deadline=undefined;x.deadlineEdited=true;})}>清空截止日</button>
-          </div>
-          </details>
           {deadlineValues.length>1&&<p className="warning">发现多个截止时间，请逐一核对来源。已确认日期不会被后导入文件替换。</p>}
         </section>
 
+        <section className="panel notice-summary" aria-label="内容概述">
+          <div className="section-heading"><h2>内容概述</h2><span>{n.summaryEdited?'已人工修改':'从原文提炼，可直接修改'}</span></div>
+          <textarea aria-label="内容概述" key={n.id+':summary:'+n.summary} defaultValue={n.summary||''} maxLength={4000} placeholder="识别正文后自动生成概述，也可以直接填写…" onBlur={e=>{const summary=e.currentTarget.value;if(summary!==n.summary)void update(x=>{x.summary=summary;x.summaryEdited=true;});}}/>
+        </section>
+
+        <section className="panel notice-sources" aria-label="原文与来源">
+          <div className="section-heading"><h2>原文</h2><a href={'#import/'+n.id}>关联更多附件 ↗</a></div>
+          {n.sources.map((s,i)=><SourcePanel key={s.id} source={s} noticeId={n.id} initiallyOpen={i===0}/>)}
+          <button onClick={()=>void rederive(n.id)}>从已保存正文重新提取候选</button>
+          <p className="muted">重提取保留人工标题、概述、已确认/清空的截止日、清单编辑及勾选。</p>
+        </section>
+
         <div className="detail-tabs" role="tablist" aria-label="通知内容">
-          {[['actions','待办与日程'],['materials','材料清单'],['dates','时间依据'],['sources','原文与来源']].map(([key,label])=><button key={key} id={`tab-${key}`} role="tab" aria-selected={tab===key} aria-controls={`panel-${key}`} onClick={()=>setTab(key)}>{label}</button>)}
+          {[['actions','待办与日程'],['materials','材料清单'],['dates','时间依据']].map(([key,label])=><button key={key} id={`tab-${key}`} role="tab" aria-selected={tab===key} aria-controls={`panel-${key}`} onClick={()=>setTab(key)}>{label}</button>)}
         </div>
 
         <section className="panel" id="panel-dates" role="tabpanel" aria-labelledby="tab-dates" hidden={tab!=='dates'}>
@@ -175,12 +179,6 @@ export function Detail({notice:n,jobs}:{notice:Notice;jobs:ParseJob[]}) {
           </form>
         </section>
 
-        <section className="panel" id="panel-sources" role="tabpanel" aria-labelledby="tab-sources" hidden={tab!=='sources'}>
-          <div className="section-heading"><h2>原文与来源</h2><a href={'#import/'+n.id}>关联更多附件 ↗</a></div>
-          {n.sources.map(s=><SourcePanel key={s.id} source={s} noticeId={n.id}/>)}
-          <button onClick={()=>void rederive(n.id)}>从已保存正文重新提取候选</button>
-          <p className="muted">重提取保留人工标题、已确认/清空的截止日、清单编辑及勾选。</p>
-        </section>
       </div>
 
       <aside className="detail-side">
@@ -217,11 +215,12 @@ export function Detail({notice:n,jobs}:{notice:Notice;jobs:ParseJob[]}) {
   </>;
 }
 
-function SourcePanel({source:s,noticeId}:{source:Source;noticeId:string}) {
+function SourcePanel({source:s,noticeId,initiallyOpen=false}:{source:Source;noticeId:string;initiallyOpen?:boolean}) {
   const attachment=useLive(()=>s.attachmentId?db.attachments.get(s.attachmentId):Promise.resolve(undefined),undefined,[s.attachmentId]);
   const url=useBlobURL(attachment?.blob);
   const [pages,setPages]=useState('');
   const [message,setMessage]=useState('');
+  const [expanded,setExpanded]=useState(initiallyOpen);
   const scan=()=>{
     const nums=new Set<number>();
     for(const token of pages.split(/[,，\s]+/).filter(Boolean)){
@@ -235,7 +234,7 @@ function SourcePanel({source:s,noticeId}:{source:Source;noticeId:string}) {
     void queueSource(noticeId,s.id,[...nums].sort((a,b)=>a-b));
     setMessage('选定页面已排队 OCR，现有其他页正文保留');
   };
-  return <details className="source">
+  return <details className="source" open={expanded} onToggle={e=>setExpanded(e.currentTarget.open)}>
     <summary>{s.name} <small>{s.kind.toUpperCase()} {attachment?` · ${(attachment.size/1024).toFixed(1)} KB`:''}</small></summary>
     {s.url&&<a href={s.url} target="_blank" rel="noreferrer">打开原网页 ↗</a>}
     {s.url&&!s.text&&<p className="warning">仅保存了链接，未读取正文。请打开网页点击扩展采集，或在下方粘贴正文。</p>}

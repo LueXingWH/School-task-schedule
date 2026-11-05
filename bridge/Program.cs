@@ -36,7 +36,7 @@ namespace XiaoshijianBridge {
                 }
                 if(Has(args,"--mcp")){RunMcp(Option(args,"--instance"),Environment.GetEnvironmentVariable("XIAOSHIJIAN_MCP_TOKEN"));return 0;}
                 if(args.Length>0&&Regex.IsMatch(args[0],"^chrome-extension://[a-p]{32}/$")){RunNative();return 0;}
-                Console.Error.WriteLine("请从校事笺设置复制 MCP 配置。ZIP 安装时运行：Xiaoshijian.Mcp.exe --register --extension-id 扩展ID --browser both");return 1;
+                Console.Error.WriteLine("请从校事笺左侧的 MCP 配置模块复制配置。ZIP 安装时运行：Xiaoshijian.Mcp.exe --register --extension-id 扩展ID --browser both");return 1;
             }catch(Exception){Console.Error.WriteLine("校事笺 MCP 桥接启动失败，请重新连接或重新安装桥接程序。");return 1;}
         }
 
@@ -103,9 +103,9 @@ namespace XiaoshijianBridge {
             finally{if(id!=null){TaskCompletionSource<Dictionary<string,object>> ignored;Pending.TryRemove(id,out ignored);}}
         }
         static object CallPlugin(string instance,string token,string client,string tool,object arguments) {
-            if(!Regex.IsMatch(token??"","^[a-f0-9]{64}$"))throw new Exception("缺少 MCP 连接口令，请从插件设置重新复制配置");
+            if(!Regex.IsMatch(token??"","^[a-f0-9]{64}$"))throw new Exception("缺少 MCP 连接口令，请从左侧 MCP 配置模块重新复制配置");
             using(var pipe=new NamedPipeClientStream(".",PipeName(instance),PipeDirection.InOut,PipeOptions.Asynchronous)){
-                try{pipe.Connect(3000);}catch(TimeoutException){throw new Exception("未连接校事笺：请保持浏览器运行，并在目标浏览器设置中启用 MCP 接入");}
+                try{pipe.Connect(3000);}catch(TimeoutException){throw new Exception("未连接校事笺：请保持浏览器运行，并在目标浏览器左侧的 MCP 配置模块启用接入");}
                 WriteLine(pipe,new {token=token,client=client,tool=tool,args=arguments});
                 var read=Task.Run(()=>ReadLine(pipe,ResponseLimit));if(!read.Wait(22000))throw new Exception("日程请求超时，结果未知；请用相同 request_id 和参数重试");
                 if(String.IsNullOrEmpty(read.Result))throw new Exception("浏览器连接已关闭；请保持浏览器运行后用相同 request_id 重试");

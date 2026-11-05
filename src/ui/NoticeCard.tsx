@@ -2,7 +2,7 @@ import React from 'react';
 import {type Notice,type ParseJob} from '../model';
 import {deadlineTone,daysLabel,materialStats} from '../schedule';
 
-const lifeText={review:'待核对',active:'进行中',done:'已完成',archived:'已归档'};
+const lifeText={active:'未完成',done:'完成'};
 
 /** 通知卡片：左侧状态色条 + 材料进度 + 右侧剩余天数胶囊。 */
 export function NoticeCard({notice:n,now,jobs}:{notice:Notice;now:Date;jobs:ParseJob[]}) {

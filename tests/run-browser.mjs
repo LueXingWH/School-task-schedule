@@ -1,6 +1,6 @@
 import {spawn} from 'node:child_process';
 const channels=process.argv[2]==='matrix'?['chrome','msedge']:[process.argv[2]||'chrome'];
-const scripts=process.argv[3]==='public'?['tests/public-web.mjs']:['tests/browser.mjs','tests/recognition.mjs','tests/mcp.mjs','tests/install.mjs'];
+const scripts=process.argv[3]==='public'?['tests/public-web.mjs']:['tests/browser.mjs','tests/workflow.mjs','tests/recognition.mjs','tests/mcp.mjs','tests/install.mjs'];
 for(const channel of channels) {
   if(!['chrome','msedge'].includes(channel))throw Error('Unsupported browser channel');
   for(const script of scripts)await new Promise((resolve,reject)=>{

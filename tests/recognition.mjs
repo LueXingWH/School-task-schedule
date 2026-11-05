@@ -18,7 +18,7 @@ const jobsDone=()=>wait(async()=>{const d=await readDB();return d.jobs.length&&d
 const current=async()=>{const d=await readDB();return d.notices.find(n=>n.id===page.url().split('/').at(-1));};
 async function paste(text){await page.goto(`${runtime.base}/dashboard.html#import`);await page.getByLabel('通知正文',{exact:true}).fill(text);await page.getByRole('button',{name:'保存原文并整理'}).click();await page.waitForURL(/#notice\//);await jobsDone();return current();}
 async function upload(file){await page.goto(`${runtime.base}/dashboard.html#import`);await page.getByLabel('导入文件',{exact:true}).setInputFiles(file);await page.waitForURL(/#notice\//);await jobsDone();return current();}
-const tab=name=>page.getByRole('tab',{name,exact:true}).click();
+const tab=name=>name==='原文与来源'?page.getByRole('heading',{name:'原文',exact:true}).scrollIntoViewIfNeeded():page.getByRole('tab',{name,exact:true}).click();
 async function record(name,fn){const start=Date.now();try{await fn();results.push({name,status:'PASS',ms:Date.now()-start});console.log('PASS',name);}catch(e){results.push({name,status:'FAIL',error:String(e)});await page.screenshot({path:`${out}/failure.png`,fullPage:true});throw e;}}
 let sampleId;
 try{
@@ -52,6 +52,13 @@ try{
       if(filename==='scanned.pdf')assert.equal(n.sources[0].pages[0].method,'ocr');
     }
   });
+  await record('低分辨率截图经放大预处理仍识别标题、截止日与时刻',async()=>{
+    const {createCanvas,loadImage}=await import('@napi-rs/canvas');const original=await loadImage(await readFile('tests/fixtures/notice-zh.png'));
+    const small=createCanvas(750,350);small.getContext('2d').drawImage(original,0,0,750,350);
+    const file=`${out}/small-notice.png`;await writeFile(file,small.toBuffer('image/png'));const n=await upload(file);
+    assert(n.title.includes('校园'));assert(n.dates.some(d=>d.value==='2026-11-09T18:00'));assert(n.actions.length>0);
+    await writeFile(`${out}/small-ocr-actual.txt`,n.sources[0].text);
+  });
   await record('11 页扫描 PDF 自动处理 10 页，明确剩余范围并可选页继续',async()=>{
     const original=await PDFDocument.load(await readFile('tests/fixtures/scanned.pdf'));const pdf=await PDFDocument.create();
     for(let i=0;i<11;i++){const [p]=await pdf.copyPages(original,[0]);pdf.addPage(p);}
@@ -59,7 +66,7 @@ try{
     assert.deepEqual(n.sources[0].pages.map(p=>p.method),[...Array(10).fill('ocr'),'scan']);
     assert(n.sources[0].warnings.some(w=>w.includes('第 11 页')&&w.includes('10 页')));
     assert((await readDB()).jobs.some(j=>j.noticeId===n.id&&j.state==='partial'));
-    const first=n.sources[0].pages[0].text;await tab('原文与来源');await page.locator('details.source > summary').click();
+    const first=n.sources[0].pages[0].text;await tab('原文与来源');
     await page.getByLabel('PDF OCR 页码').fill('11');await page.getByRole('button',{name:'识别选定扫描页'}).click();
     await wait(async()=>(await readDB()).jobs.some(j=>j.noticeId===n.id&&j.pages?.includes(11)));await jobsDone();n=await current();
     assert(n.sources[0].pages.every(p=>p.method==='ocr'));assert.equal(n.sources[0].pages[0].text,first);
@@ -67,7 +74,7 @@ try{
   await record('长待办紧凑列表、页签和窄屏确认按钮保持可见',async()=>{
     await paste('学生办事通知\n'+Array.from({length:40},(_,i)=>`2026年11月9日提交第${i+1}份报名表。`).join('\n'));
     const list=page.locator('.action-list');assert(await list.evaluate(el=>el.scrollHeight>el.clientHeight&&el.clientHeight<=320));
-    assert(await page.locator('#panel-sources').isHidden());assert(await page.locator('#panel-dates').isHidden());
+    assert(await page.locator('.notice-sources').isVisible());assert(await page.locator('#panel-dates').isHidden());
     await page.screenshot({path:`${out}/compact-desktop.png`,fullPage:true});
     await page.setViewportSize({width:390,height:844});
     assert(!await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1));

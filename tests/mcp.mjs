@@ -32,16 +32,16 @@ try{
   context.on('page',p=>p.on('pageerror',e=>errors.push(String(e))));context.on('request',r=>{if(/^https?:/.test(r.url()))requests.push(r.url());});
   await context.setOffline(true);for(const p of context.pages())if(p.url().startsWith(runtime.base))await p.close();
   page=await context.newPage();await page.goto(`${runtime.base}/icons/48.png`);
-  await record('真实 IndexedDB v1 升级到 v2，旧日程保留',async()=>{
+  await record('真实 IndexedDB v1 升级到 v3，旧日程保留',async()=>{
     await page.evaluate(()=>new Promise((resolve,reject)=>{const drop=indexedDB.deleteDatabase('xiaoshijian');drop.onerror=()=>reject(drop.error);drop.onblocked=()=>reject(Error('Old DB still in use'));drop.onsuccess=()=>{
       const q=indexedDB.open('xiaoshijian',10);q.onupgradeneeded=()=>{const d=q.result;for(const [name,indexes] of Object.entries({notices:['life','createdAt','updatedAt'],attachments:['noticeId','sourceId'],jobs:['noticeId','sourceId','state']})){const s=d.createObjectStore(name,{keyPath:'id'});for(const index of indexes)s.createIndex(index,index);}};
       q.onsuccess=()=>{const d=q.result,t=d.transaction('notices','readwrite');t.objectStore('notices').put({id:'legacy',title:'旧版保留任务',titleEdited:true,life:'active',deadlineEdited:true,createdAt:1,updatedAt:1,sources:[],dates:[],materials:[],dismissedMaterials:[],tasks:[{id:'legacy-task',text:'旧版保留任务',date:'2026-11-01',done:true}]});t.oncomplete=()=>{d.close();resolve(true);};};q.onerror=()=>reject(q.error);
     };}));
-    await page.goto(`${runtime.base}/dashboard.html#settings`);await page.getByRole('heading',{name:'MCP 接入',exact:true}).waitFor();
-    await wait(async()=>(await readDB()).version===20);assert((await readDB()).notices.some(n=>n.id==='legacy'&&n.tasks[0].done));
+    await page.goto(`${runtime.base}/dashboard.html#home`);await page.getByRole('navigation').getByRole('link',{name:'MCP 配置'}).click();await page.getByRole('heading',{name:'MCP 接入',exact:true}).waitFor();
+    await wait(async()=>(await readDB()).version===30);assert((await readDB()).notices.some(n=>n.id==='legacy'&&n.tasks[0].done));
     assert(!await page.getByLabel('启用 MCP 接入').isChecked());
   });
-  await record('真实 EXE 注册与浏览器原生连接，设置生成 MCP 配置',async()=>{
+  await record('真实 EXE 注册与浏览器原生连接，左侧入口生成 MCP 配置',async()=>{
     await page.getByLabel('启用 MCP 接入').click();await ready();
     await page.screenshot({path:`${out}/connected.png`,fullPage:true});config=await getConfig();assert.equal(path.resolve(config.command),path.resolve(installed.mcpCommand));
     const registration=await run(installed.mcpCommand,['--register','--extension-id',runtime.id,'--browser',browserSlug==='edge'?'edge':'chrome','--registration-dir',path.resolve(`${out}/registration`)],{windowsHide:true,timeout:15000});assert(JSON.parse(registration.stdout).registered);
@@ -87,6 +87,7 @@ try{
     assert.equal((await readDB()).notices.length,before);
   });
   await record('只有工作台能读取配置，关闭接入和旧口令不能调用',async()=>{
+    await page.goto(`${runtime.base}/dashboard.html#mcp`);
     const popup=await context.newPage();await popup.goto(`${runtime.base}/popup.html`);const denied=await popup.evaluate(()=>chrome.runtime.sendMessage({type:'mcp-config'}));assert(denied.error.includes('仅允许工作台'));await popup.close();
     await page.getByLabel('启用 MCP 接入').click();await wait(async()=>await page.locator('.mcp-panel .status').innerText()==='已关闭');assert((await agent.call('list_schedules',{})).isError);
     await page.getByLabel('启用 MCP 接入').click();await ready();const next=await getConfig();assert.notEqual(next.env.XIAOSHIJIAN_MCP_TOKEN,config.env.XIAOSHIJIAN_MCP_TOKEN);assert((await agent.call('list_schedules',{})).isError);

@@ -16,8 +16,10 @@ export async function imageCanvas(blob:Blob,rotation=0) {
   const image=await createImageBitmap(blob);try {
     if(image.width*image.height>LIMITS.pixels)throw Error('图片超过 2500 万像素，请缩小后再试');
     const canvas=document.createElement('canvas');const flip=Math.abs(rotation)%180===90;
-    canvas.width=flip?image.height:image.width;canvas.height=flip?image.width:image.height;
-    const ctx=canvas.getContext('2d')!;ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.translate(canvas.width/2,canvas.height/2);ctx.rotate(rotation*Math.PI/180);ctx.drawImage(image,-image.width/2,-image.height/2);return canvas;
+    const width=flip?image.height:image.width,height=flip?image.width:image.height;
+    const scale=Math.max(1,Math.min(2,1400/width,Math.sqrt(LIMITS.pixels/(width*height))));
+    canvas.width=Math.floor(width*scale);canvas.height=Math.floor(height*scale);
+    const ctx=canvas.getContext('2d')!;ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.translate(canvas.width/2,canvas.height/2);ctx.scale(scale,scale);ctx.rotate(rotation*Math.PI/180);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(image,-image.width/2,-image.height/2);return canvas;
   }finally{image.close();}
 }
 export async function ocrImage(image:HTMLCanvasElement,signal:AbortSignal,progress:(s:string)=>void) {

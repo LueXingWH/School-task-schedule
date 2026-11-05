@@ -17,7 +17,7 @@
   },
   {
     "name": "list_schedules",
-    "description": "查询校事笺的个人任务日程，返回任务 ID、标题、日期、时刻、完成状态和 agent 来源。备注超过 500 字符会截断并标记 notes_truncated。默认仅列出未完成且未归档的任务，不读取附件和通知全文。日期范围含首尾两天，按浏览器本地日期。",
+    "description": "查询校事笺的个人任务日程，返回任务 ID、标题、日期、时刻、完成状态和 agent 来源。备注超过 500 字符会截断并标记 notes_truncated。默认仅列出未完成通知中的未完成任务，不读取附件和通知全文。日期范围含首尾两天，按浏览器本地日期。",
     "inputSchema": {
       "type":"object","additionalProperties":false,
       "properties": {

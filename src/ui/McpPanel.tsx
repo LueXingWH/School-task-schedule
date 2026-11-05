@@ -26,7 +26,7 @@ export function McpPanel(){
     <p>让支持本地 MCP 的 agent 添加和查询个人日程。开启后，工具调用会直接保存到当前浏览器；日期和时刻按当前本地时区解释。</p>
     <label className="row"><input aria-label="启用 MCP 接入" type="checkbox" checked={status.enabled} disabled={busy} onChange={e=>void action('mcp-enable',{enabled:e.currentTarget.checked})}/>启用本地 MCP</label>
     {status.enabled&&<div className="row"><button disabled={busy} onClick={()=>void action('mcp-reconnect')}>重新连接 MCP</button><button disabled={!status.connected} onClick={()=>void showConfig()}>生成 MCP 配置</button></div>}
-    {status.enabled&&!status.connected&&<p className="hint">请先运行 1.5.0 或更新版本安装助手以安装本地桥接，再点击重新连接。通过 ZIP 安装时，桥接目录中的程序支持手动注册，步骤见使用指南。</p>}
+    {status.enabled&&!status.connected&&<p className="hint">请先运行随包的安装助手以安装本地桥接，再点击重新连接。通过 ZIP 安装时，桥接目录中的程序支持手动注册，步骤见使用指南。</p>}
     {status.error&&status.enabled&&<p className="warning">{status.error}</p>}
     {config&&<>
       <label>MCP 客户端配置<textarea aria-label="MCP 客户端配置" readOnly value={config}/></label>
