@@ -119,7 +119,7 @@ await copy(path.join(root,'README.md'),path.join(docsStage,'README.md'));
 await fs.writeFile(path.join(stage,'成果说明.md'),`# 校事笺 ${version} 成果包\n\n已同步应用、源码、10页可编辑PPT、使用说明和实际测试证据。参赛材料中已填写的信息保持原样；未知个人信息仍待补齐。\n\n当前版本：${version}，源码提交 ${commit}。单元测试 ${unit.numPassedTests} 条通过；双浏览器各15组核心、8组交互、8组识别与11组MCP检查通过，ZIP安装恢复分别5/6项通过。旧版验证记录保留在本地替换备份中，不作为本版验收。\n\n参赛包提供已验证的通用扩展ZIP；本目录单独保留新版安装助手和浏览器ZIP，安装助手未复验全部WinForms按钮。\n\n参赛包：${archiveName}。SHA256SUMS.txt核对发布文件和参赛压缩包；包内另有完整逐文件清单。\n`,'utf8');
 const released=[];
 for(const kind of ['edge.zip','chrome.zip','setup.exe']){const name=`xiaoshijian-${version}-${kind}`;await copy(path.join(root,'release',name),path.join(stage,name));released.push(name);}
-await fs.writeFile(path.join(stage,'SHA256SUMS.txt'),(await Promise.all([...released,archiveName].map(async name=>`${sha(await fs.readFile(path.join(stage,name)))}  ${name}`))).join('\n')+'\n','ascii');
+await fs.writeFile(path.join(stage,'SHA256SUMS.txt'),(await Promise.all([...released,archiveName].map(async name=>`${sha(await fs.readFile(path.join(stage,name)))}  ${name}`))).join('\n')+'\n','utf8');
 await fs.mkdir(backup,{recursive:true});const actions=[];
 async function publish(name){
   const source=assertInside(stage,path.join(stage,name)),target=assertInside(delivery,path.join(delivery,name)),saved=assertInside(backup,path.join(backup,name));
