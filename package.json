@@ -16,6 +16,7 @@
     "test:public": "node tests/public-web.mjs",
     "test:clean": "node scripts/clean-check.mjs",
     "deliver": "node scripts/deliver.mjs",
+    "package:competition": "node scripts/update-competition.mjs",
     "test:edge": "node tests/run-browser.mjs msedge",
     "test:chrome": "node tests/run-browser.mjs chrome",
     "test:matrix": "node tests/run-browser.mjs matrix",

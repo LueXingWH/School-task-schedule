@@ -13,3 +13,6 @@ public/vendor/
 
 # 设置页下载的实际 MCP 配置含本机连接口令
 /xiaoshijian-mcp.json
+
+# 本地交付成果包
+/成果交付/

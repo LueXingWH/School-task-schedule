@@ -50,6 +50,8 @@ npm.cmd run deliver
 
 `npm.cmd run test:public:edge` 可额外在 Edge 验证公开校园通知页（此项需要该网站可访问）。`test:setup` 默认使用 Edge，也可通过 `TEST_BROWSER=chrome` 测试 Chrome；实际运行当前 EXE、检查文件/快捷方式、管理入口与剪贴板，验证默认配置和重复更新的数据保留。`deliver` 要求当前版本两个浏览器的业务验收和当前 EXE 在两个浏览器的按钮验收均通过后，生成安装助手 EXE、Edge/Chrome ZIP、源码 ZIP、完整交付 ZIP 和 SHA-256 清单。
 
+更新既有参赛材料可用 `npm.cmd run package:competition -- --dry-run` 预检，再运行 `npm.cmd run package:competition`。它保留已填报名资料，替换应用、源码、PPT、说明和实测证据，旧版移入本地备份。输入和校验要求见 [参赛包更新指南](docs/competition-package.md)。
+
 ## 目录
 
 - `src/ui`：工作台、导入、通知详情、设置；`popup.tsx` / `background.ts`：工具栏与事件。
